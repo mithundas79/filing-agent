@@ -3,6 +3,7 @@ name: pages
 on:
   push:
     branches: [main]
+    paths-ignore: ["**.md"]
 
 permissions:
   contents: read
@@ -24,6 +25,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+      - run: npm ci
       - run: cd demo && npm ci && npm run build
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
