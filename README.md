@@ -126,6 +126,10 @@ and structured sidecars with OCR and accounting rules — offline, no model.
 This agent picks up exactly where it stops: point the CLI at a folder of
 doc-intake sidecars and it classifies them into your filing categories.
 
+The third sibling, [doc-intake-service](https://github.com/mithundas79/doc-intake-service),
+is the full-stack Python variant with a *trained* classifier instead of an LLM -
+same rule layer, different judgment engine.
+
 ## Design rules
 
 - **Judgment to the model, authority to the code.** The model proposes; the
