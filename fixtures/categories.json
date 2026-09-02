@@ -1,0 +1,7 @@
+[
+  { "key": "supplier-invoices", "description": "Bills from vendors for goods or services, to be paid" },
+  { "key": "receipts", "description": "Proof of a payment already made, card or cash" },
+  { "key": "bank-statements", "description": "Periodic statements from a bank or card provider" },
+  { "key": "contracts", "description": "Agreements, engagement letters, signed terms" },
+  { "key": "other", "description": "Legitimate business documents that fit nothing above" }
+]
