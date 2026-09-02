@@ -1,9 +1,9 @@
 /*
- * USD per million tokens, by model. Receipts must state what a run cost;
- * when the model is not in this table the receipt says null rather than
- * guessing - an unknown cost is information, a wrong cost is a lie.
- *
- * Prices as published June 2026; update alongside the model default.
+ * USD per million tokens, by model. Local open-weights models served by
+ * Ollama have no per-token price, so the table is empty by default and the
+ * receipt's cost_usd is null - which is the honest value: an unknown cost
+ * is information, a wrong cost is a lie. Point the caller seam at a hosted
+ * API and this table is where its prices go.
  */
 
 export interface Pricing {
@@ -11,11 +11,7 @@ export interface Pricing {
   outputPerMTok: number;
 }
 
-export const PRICING: Record<string, Pricing> = {
-  "claude-opus-5": { inputPerMTok: 5.0, outputPerMTok: 25.0 },
-  "claude-sonnet-5": { inputPerMTok: 2.0, outputPerMTok: 10.0 },
-  "claude-haiku-4-5": { inputPerMTok: 1.0, outputPerMTok: 5.0 },
-};
+export const PRICING: Record<string, Pricing> = {};
 
 export function costUsd(model: string, inputTokens: number, outputTokens: number): number | null {
   const p = PRICING[model];

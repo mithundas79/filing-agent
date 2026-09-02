@@ -1,7 +1,7 @@
-import type Anthropic from "@anthropic-ai/sdk";
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { RecordingCaller, ReplayCaller, type ModelCaller } from "../src/caller.js";
+import type { ContentBlock, Message, ToolUseBlock } from "../src/model.js";
 import { classifyDocument } from "../src/loop.js";
 import type { Category, DocSource } from "../src/types.js";
 
@@ -15,21 +15,19 @@ const doc: DocSource = {
 };
 
 let seq = 0;
-function msg(content: Anthropic.ContentBlock[]): Anthropic.Message {
+function msg(content: ContentBlock[]): Message {
   return {
     id: `msg_r_${++seq}`,
-    type: "message",
     role: "assistant",
-    model: "claude-opus-5",
+    model: "test-model",
     content,
     stop_reason: "tool_use",
-    stop_sequence: null,
-    usage: { input_tokens: 10, output_tokens: 5 } as Anthropic.Usage,
-  } as Anthropic.Message;
+    usage: { input_tokens: 10, output_tokens: 5 },
+  };
 }
 
-const script: Anthropic.Message[] = [
-  msg([{ type: "tool_use", id: "tu_1", name: "read_document", input: {} } as Anthropic.ToolUseBlock]),
+const script: Message[] = [
+  msg([{ type: "tool_use", id: "tu_1", name: "read_document", input: {} } as ToolUseBlock]),
   msg([
     {
       type: "tool_use",
@@ -42,13 +40,13 @@ const script: Anthropic.Message[] = [
         confidence: 0.9,
         evidence: ["Total Due 677.04"],
       },
-    } as Anthropic.ToolUseBlock,
+    } as ToolUseBlock,
   ]),
 ];
 
 class OnceCaller implements ModelCaller {
   private s = [...script];
-  async create(): Promise<Anthropic.Message> {
+  async create(): Promise<Message> {
     const m = this.s.shift();
     if (!m) throw new Error("exhausted");
     return m;

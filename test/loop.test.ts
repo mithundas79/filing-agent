@@ -1,7 +1,14 @@
-import type Anthropic from "@anthropic-ai/sdk";
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import type { ModelCaller } from "../src/caller.js";
+import type {
+  ContentBlock,
+  Message,
+  MessageCreateParams,
+  TextBlock,
+  ToolResultBlockParam,
+  ToolUseBlock,
+} from "../src/model.js";
 import { classifyDocument } from "../src/loop.js";
 import type { Category, DocSource } from "../src/types.js";
 
@@ -28,30 +35,27 @@ const doc: DocSource = {
 };
 
 let msgSeq = 0;
-function msg(content: Anthropic.ContentBlock[], stop_reason: Anthropic.Message["stop_reason"] = "tool_use"): Anthropic.Message {
+function msg(content: ContentBlock[], stop_reason: Message["stop_reason"] = "tool_use"): Message {
   msgSeq++;
   return {
     id: `msg_test_${msgSeq}`,
-    type: "message",
     role: "assistant",
-    model: "claude-opus-5",
+    model: "test-model",
     content,
     stop_reason,
-    stop_sequence: null,
-    usage: { input_tokens: 100, output_tokens: 50 } as Anthropic.Usage,
-  } as Anthropic.Message;
+    usage: { input_tokens: 100, output_tokens: 50 },
+  };
 }
 
-const toolUse = (name: string, input: unknown, id?: string): Anthropic.ToolUseBlock =>
-  ({ type: "tool_use", id: id ?? `tu_${name}_${++msgSeq}`, name, input }) as Anthropic.ToolUseBlock;
+const toolUse = (name: string, input: unknown, id?: string): ToolUseBlock =>
+  ({ type: "tool_use", id: id ?? `tu_${name}_${++msgSeq}`, name, input });
 
-const text = (t: string): Anthropic.TextBlock =>
-  ({ type: "text", text: t, citations: null }) as Anthropic.TextBlock;
+const text = (t: string): TextBlock => ({ type: "text", text: t });
 
 class ScriptedCaller implements ModelCaller {
-  requests: Anthropic.MessageCreateParams[] = [];
-  constructor(private script: Anthropic.Message[]) {}
-  async create(params: Anthropic.MessageCreateParams): Promise<Anthropic.Message> {
+  requests: MessageCreateParams[] = [];
+  constructor(private script: Message[]) {}
+  async create(params: MessageCreateParams): Promise<Message> {
     this.requests.push(structuredClone(params));
     const next = this.script.shift();
     if (!next) throw new Error("script exhausted - the loop called more often than scripted");
@@ -81,7 +85,7 @@ describe("classifyDocument", () => {
     expect(receipt.calls[0]!.request_id).toMatch(/^msg_test_/);
     expect(receipt.retries).toBe(0);
     expect(receipt.usage).toEqual({ input_tokens: 200, output_tokens: 100 });
-    expect(receipt.cost_usd).toBeCloseTo((200 * 5 + 100 * 25) / 1_000_000, 6);
+    expect(receipt.cost_usd).toBeNull(); // no per-token price for a local model
     expect(receipt.document.sha256).toBe(doc.sha256);
     expect(receipt.tools.map((t) => t.tool)).toEqual([
       "read_document",
@@ -105,7 +109,7 @@ describe("classifyDocument", () => {
     const second = caller.requests[1]!;
     const lastUser = second.messages[second.messages.length - 1]!;
     expect(lastUser.role).toBe("user");
-    const blocks = lastUser.content as Anthropic.ToolResultBlockParam[];
+    const blocks = lastUser.content as ToolResultBlockParam[];
     expect(blocks.filter((b) => b.type === "tool_result")).toHaveLength(2);
   });
 
@@ -124,7 +128,7 @@ describe("classifyDocument", () => {
     // the rejection went back as a tool error, not as acceptance
     const third = caller.requests[2]!;
     const lastUser = third.messages[third.messages.length - 1]!;
-    const blocks = lastUser.content as Anthropic.ToolResultBlockParam[];
+    const blocks = lastUser.content as ToolResultBlockParam[];
     expect(blocks[0]!.is_error).toBe(true);
     expect(String(blocks[0]!.content)).toContain("not found in the document");
   });

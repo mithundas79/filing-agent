@@ -1,6 +1,6 @@
-import type Anthropic from "@anthropic-ai/sdk";
 import { createHash, randomUUID } from "node:crypto";
 import type { ModelCaller } from "./caller.js";
+import type { MessageParam, ToolResultBlockParam, ToolUseBlock } from "./model.js";
 import { costUsd } from "./pricing.js";
 import { EmptyFiledIndex, executeTool, TOOLS, type FiledIndex } from "./tools.js";
 import type { CallTrace, Category, DocSource, Outcome, Receipt, ToolTrace, Verdict } from "./types.js";
@@ -17,8 +17,8 @@ import { validateVerdict } from "./validate.js";
  *   - a rejected verdict comes back as a tool error with the reasons,
  *     bounded by maxRetries; after that, a person takes over
  *   - a refusal or an unproductive run routes to a person, never to a
- *     silent fallback model: a different model would be a different
- *     provenance record
+ *     silent fallback model: a different model is a different provenance
+ *     record
  *   - all parallel tool calls are answered in a single user message
  */
 
@@ -32,7 +32,7 @@ export interface AgentOptions {
   maxRetries?: number;
 }
 
-export const DEFAULT_MODEL = "claude-opus-5";
+export const DEFAULT_MODEL = "qwen2.5:7b";
 
 const SYSTEM = `You are a filing agent for business documents. Your job is to decide
 which category one document belongs to, or to hand it to a person.
@@ -41,8 +41,9 @@ Rules you work under:
 - Read the document with read_document before anything else.
 - The category must be one of the keys returned by list_categories.
 - Every evidence entry in your verdict must be a VERBATIM quote from the
-  document. Your verdict is checked by code; a quote that is not in the
-  document is rejected.
+  document: copy the exact characters of a line you saw, do not paraphrase,
+  do not fix spelling, do not merge lines. Your verdict is checked by code;
+  a quote that is not in the document is rejected.
 - If you are not confident, or anything looks wrong, call flag_for_human.
   Asking for help is a correct outcome, not a failure.
 - You must finish by calling record_verdict or flag_for_human.`;
@@ -57,8 +58,8 @@ export async function classifyDocument(doc: DocSource, opts: AgentOptions): Prom
   const model = opts.model ?? DEFAULT_MODEL;
   const filed = opts.filed ?? new EmptyFiledIndex();
   const minConfidence = opts.minConfidence ?? 0.6;
-  const maxIterations = opts.maxIterations ?? 8;
-  const maxRetries = opts.maxRetries ?? 2;
+  const maxIterations = opts.maxIterations ?? 10;
+  const maxRetries = opts.maxRetries ?? 3;
 
   const startedAt = new Date().toISOString();
   const calls: CallTrace[] = [];
@@ -69,7 +70,7 @@ export async function classifyDocument(doc: DocSource, opts: AgentOptions): Prom
   let nudged = false;
   let outcome: Outcome | null = null;
 
-  const messages: Anthropic.MessageParam[] = [
+  const messages: MessageParam[] = [
     {
       role: "user",
       content:
@@ -110,9 +111,7 @@ export async function classifyDocument(doc: DocSource, opts: AgentOptions): Prom
       continue;
     }
 
-    const toolUses = response.content.filter(
-      (b): b is Anthropic.ToolUseBlock => b.type === "tool_use",
-    );
+    const toolUses = response.content.filter((b): b is ToolUseBlock => b.type === "tool_use");
 
     if (toolUses.length === 0) {
       if (!nudged) {
@@ -130,7 +129,7 @@ export async function classifyDocument(doc: DocSource, opts: AgentOptions): Prom
 
     messages.push({ role: "assistant", content: response.content });
 
-    const results: Anthropic.ToolResultBlockParam[] = [];
+    const results: ToolResultBlockParam[] = [];
     for (const use of toolUses) {
       let resultText: string;
       let isError = false;

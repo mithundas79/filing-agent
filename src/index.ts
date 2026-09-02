@@ -1,5 +1,17 @@
-export { apiCaller, RecordingCaller, ReplayCaller } from "./caller.js";
-export type { ModelCaller, RecordedSession } from "./caller.js";
+export { ollamaCaller, RecordingCaller, ReplayCaller } from "./caller.js";
+export type { ModelCaller, OllamaOptions, RecordedSession } from "./caller.js";
+export type {
+  ContentBlock,
+  Message,
+  MessageCreateParams,
+  MessageParam,
+  StopReason,
+  TextBlock,
+  Tool,
+  ToolResultBlockParam,
+  ToolUseBlock,
+  Usage,
+} from "./model.js";
 export { classifyDocument, DEFAULT_MODEL } from "./loop.js";
 export type { AgentOptions, RunResult } from "./loop.js";
 export { costUsd, PRICING } from "./pricing.js";

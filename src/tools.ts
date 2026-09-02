@@ -1,14 +1,14 @@
-import type Anthropic from "@anthropic-ai/sdk";
+import type { Tool } from "./model.js";
 import type { Category, DocSource } from "./types.js";
 
 /*
  * The tool surface. Two terminal tools end the run - record_verdict
- * (validated, strict-schema) and flag_for_human (always accepted; asking
+ * (validated by code) and flag_for_human (always accepted; asking
  * for help is never wrong). Everything else is how the model looks at the
  * world instead of hallucinating it.
  */
 
-export const TOOLS: Anthropic.Tool[] = [
+export const TOOLS: Tool[] = [
   {
     name: "read_document",
     description:
@@ -52,7 +52,6 @@ export const TOOLS: Anthropic.Tool[] = [
     name: "record_verdict",
     description:
       "File the document. Every evidence entry must be a verbatim quote from the document text; the verdict is validated by code and refused if the category does not exist, confidence is out of range, or a quote is not found in the document. This ends the run when accepted.",
-    strict: true,
     input_schema: {
       type: "object",
       properties: {

@@ -1,28 +1,27 @@
 #!/usr/bin/env node
-import Anthropic from "@anthropic-ai/sdk";
 import { createHash } from "node:crypto";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { apiCaller, RecordingCaller, ReplayCaller, type ModelCaller, type RecordedSession } from "./caller.js";
+import { ollamaCaller, RecordingCaller, ReplayCaller, type ModelCaller, type RecordedSession } from "./caller.js";
 import { classifyDocument, DEFAULT_MODEL } from "./loop.js";
 import type { Category, DocSource } from "./types.js";
 
 /*
  * filing-agent <docs-dir> [--categories <file>] [--model <id>]
  *              [--record <session.json>] [--replay <session.json>]
- *              [--out <dir>]
+ *              [--out <dir>] [--host <url>]
  *
  * Reads .txt documents (and doc-intake .json sidecars) from a directory,
  * runs the agent on each, and writes one receipt per document plus a
  * summary to stdout.
  *
- * Auth for live runs comes from the environment (ANTHROPIC_API_KEY, or
- * anything else the SDK resolves). --replay needs no credentials at all.
+ * Live runs talk to a local Ollama server (default http://127.0.0.1:11434,
+ * override with --host or OLLAMA_HOST). --replay needs no model at all.
  */
 
 function usage(): never {
   console.error(
-    "usage: filing-agent <docs-dir> [--categories file.json] [--model id] [--record out.json] [--replay session.json] [--out receipts]",
+    "usage: filing-agent <docs-dir> [--categories file.json] [--model id] [--record out.json] [--replay session.json] [--out receipts] [--host url]",
   );
   process.exit(2);
 }
@@ -62,7 +61,7 @@ const DEFAULT_CATEGORIES: Category[] = [
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
-  const dir = args.find((a) => !a.startsWith("--"));
+  const dir = args.find((a) => !a.startsWith("--") && args[args.indexOf(a) - 1]?.startsWith("--") !== true);
   if (!dir) usage();
 
   const model = flag(args, "--model") ?? DEFAULT_MODEL;
@@ -70,6 +69,7 @@ async function main(): Promise<void> {
   const categoriesFile = flag(args, "--categories");
   const recordFile = flag(args, "--record");
   const replayFile = flag(args, "--replay");
+  const host = flag(args, "--host");
 
   const categories: Category[] = categoriesFile
     ? (JSON.parse(await readFile(categoriesFile, "utf8")) as Category[])
@@ -82,9 +82,9 @@ async function main(): Promise<void> {
     const session = JSON.parse(await readFile(replayFile, "utf8")) as RecordedSession;
     caller = new ReplayCaller(session);
   } else {
-    caller = apiCaller(new Anthropic());
+    caller = ollamaCaller({ host });
     if (recordFile) {
-      recorder = new RecordingCaller(caller, `filing-agent session over ${dir}`);
+      recorder = new RecordingCaller(caller, `filing-agent live session over ${dir}, model ${model}`);
       caller = recorder;
     }
   }
@@ -99,7 +99,22 @@ async function main(): Promise<void> {
   let anyHuman = false;
 
   for (const doc of docs) {
-    const { receipt } = await classifyDocument(doc, { caller, categories, model });
+    let receipt;
+    try {
+      ({ receipt } = await classifyDocument(doc, { caller, categories, model }));
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("ECONNREFUSED") || msg.includes("fetch failed")) {
+        console.error(
+          "cannot reach Ollama. Install it from https://ollama.com, then:\n" +
+            `  ollama pull ${model}\n` +
+            "and make sure the server is running (the desktop app runs it automatically).",
+        );
+        process.exit(2);
+      }
+      throw err;
+    }
+
     const receiptPath = path.join(outDir, `${doc.name}.receipt.json`);
     await writeFile(receiptPath, JSON.stringify(receipt, null, 2) + "\n", "utf8");
 
@@ -107,7 +122,8 @@ async function main(): Promise<void> {
     if (o.kind === "filed") {
       console.log(
         `filed   ${doc.name} -> ${o.verdict.category}  (confidence ${o.verdict.confidence}, ` +
-          `${receipt.calls.length} calls, $${receipt.cost_usd ?? "?"})`,
+          `${receipt.calls.length} calls, ${receipt.retries} retries, ` +
+          `${receipt.usage.input_tokens}+${receipt.usage.output_tokens} tokens)`,
       );
     } else {
       anyHuman = true;
