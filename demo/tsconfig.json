@@ -9,5 +9,5 @@
     "noEmit": true,
     "allowImportingTsExtensions": false
   },
-  "include": ["src", "../src"]
+  "include": ["src", "../src/pricing.ts", "../src/tools.ts", "../src/types.ts", "../src/validate.ts"]
 }
