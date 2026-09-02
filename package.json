@@ -1,0 +1,28 @@
+{
+  "name": "filing-agent",
+  "version": "0.1.0",
+  "description": "A tool-calling LLM agent that classifies and files documents - and cannot mark its own work done. Deterministic validation, bounded retries, and a receipt for every run.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Mithun Das",
+  "repository": { "type": "git", "url": "https://github.com/mithundas79/filing-agent.git" },
+  "bin": { "filing-agent": "dist/cli.js" },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist", "README.md", "LICENSE"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "dev": "tsx src/cli.ts"
+  },
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.110.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}
