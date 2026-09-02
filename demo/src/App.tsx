@@ -1,17 +1,20 @@
-import type Anthropic from "@anthropic-ai/sdk";
 import { useMemo } from "react";
-import { costUsd } from "../../src/pricing.js";
+import type { RecordedSession } from "../../src/caller.js";
+import type { ToolUseBlock } from "../../src/model.js";
 import { EmptyFiledIndex, executeTool } from "../../src/tools.js";
 import type { Category, Verdict } from "../../src/types.js";
 import { validateVerdict } from "../../src/validate.js";
-import { DOC_NAME, DOC_TEXT, RESPONSES, SESSION_NOTE } from "./session.sample";
+import { DOC_NAME, DOC_TEXT } from "./doc.js";
+import sessionJson from "./session.live.json";
 
 /*
- * A walkthrough of one agent session, executed against the REAL modules:
- * tool results come from src/tools.ts and verdict decisions from
- * src/validate.ts - the same code the CLI runs. Only the model's turns are
- * scripted, and the banner says so.
+ * A replay of one REAL recorded agent session. The model's turns come from
+ * the recording; every tool result and every verdict decision is computed
+ * live by the repo's actual modules - src/tools.ts and src/validate.ts -
+ * the same code the CLI runs.
  */
+
+const session = sessionJson as unknown as RecordedSession;
 
 const CATEGORIES: Category[] = [
   { key: "supplier-invoices", description: "Bills from vendors for goods or services, to be paid" },
@@ -22,7 +25,7 @@ const CATEGORIES: Category[] = [
 ];
 
 interface StepItem {
-  kind: "text" | "tool" | "verdict-rejected" | "verdict-accepted";
+  kind: "text" | "tool" | "verdict-rejected" | "verdict-accepted" | "human";
   title: string;
   body: string;
 }
@@ -37,6 +40,7 @@ interface Walkthrough {
   retries: number;
   usage: { input: number; output: number };
   outcome: string;
+  model: string;
 }
 
 function walk(): Walkthrough {
@@ -47,8 +51,10 @@ function walk(): Walkthrough {
   let input = 0;
   let output = 0;
   let outcome = "unfinished";
+  let model = "";
 
-  for (const r of RESPONSES) {
+  for (const { response: r } of session.exchanges) {
+    model = r.model;
     input += r.usage.input_tokens;
     output += r.usage.output_tokens;
     const items: StepItem[] = [];
@@ -57,8 +63,9 @@ function walk(): Walkthrough {
       if (block.type === "text") {
         items.push({ kind: "text", title: "model", body: block.text });
       } else if (block.type === "tool_use") {
-        if (block.name === "record_verdict") {
-          const v = block.input as Verdict;
+        const use = block as ToolUseBlock;
+        if (use.name === "record_verdict") {
+          const v = use.input as Verdict;
           const failures = validateVerdict(v, CATEGORIES, DOC_TEXT, 0.6);
           if (failures.length > 0) {
             retries++;
@@ -75,11 +82,15 @@ function walk(): Walkthrough {
               body: `category: ${v.category}\nevidence: ${v.evidence.join(" | ")}`,
             });
           }
+        } else if (use.name === "flag_for_human") {
+          const reason = (use.input as { reason?: string }).reason ?? "no reason given";
+          outcome = `human → ${reason}`;
+          items.push({ kind: "human", title: "flag_for_human", body: reason });
         } else {
-          const result = executeTool(block.name, block.input, doc, CATEGORIES, filed);
+          const result = executeTool(use.name, use.input, doc, CATEGORIES, filed);
           items.push({
             kind: "tool",
-            title: `${block.name}(${JSON.stringify(block.input)})`,
+            title: `${use.name}(${JSON.stringify(use.input)})`,
             body: result.length > 260 ? result.slice(0, 260) + " …" : result,
           });
         }
@@ -88,12 +99,12 @@ function walk(): Walkthrough {
     steps.push({ requestId: r.id, items });
   }
 
-  return { steps, retries, usage: { input, output }, outcome };
+  return { steps, retries, usage: { input, output }, outcome, model };
 }
 
 export function App(): JSX.Element {
   const w = useMemo(walk, []);
-  const cost = costUsd("claude-opus-5", w.usage.input, w.usage.output);
+  const recordedOn = new Date(session.recorded_at).toUTCString();
 
   return (
     <div className="wrap">
@@ -101,12 +112,17 @@ export function App(): JSX.Element {
       <header>
         <h1>filing-agent</h1>
         <p className="lede">
-          A tool-calling agent that classifies documents — and cannot mark its own work done. The
-          walkthrough below runs the repo&apos;s <b>real</b> tool and validation code; only the
-          model&apos;s turns are scripted.{" "}
+          A tool-calling agent that classifies documents — and cannot mark its own work done. Below
+          is a <b>real recorded session</b>: the model&apos;s turns are replayed from the recording,
+          and every tool result and verdict decision is computed live by the repo&apos;s actual
+          code.{" "}
           <a href="https://github.com/mithundas79/filing-agent">Source on GitHub</a>.
         </p>
-        <p className="banner">{SESSION_NOTE}</p>
+        <p className="banner live">
+          Recorded {recordedOn} from <b>{w.model}</b>, a local open-weights model served by Ollama —
+          no API, no key, no cost. Reproduce it: <code>npx tsx src/cli.ts fixtures/docs --record
+          session.json</code>
+        </p>
       </header>
 
       <div className="cols">
@@ -119,10 +135,11 @@ export function App(): JSX.Element {
             <h2>Run summary — what the receipt records</h2>
             <table>
               <tbody>
-                <tr><td>model</td><td><code>claude-opus-5</code></td></tr>
-                <tr><td>API calls</td><td>{w.steps.length}, ids {w.steps.map((s) => s.requestId).join(", ")}</td></tr>
+                <tr><td>model</td><td><code>{w.model}</code></td></tr>
+                <tr><td>API calls</td><td>{w.steps.length}</td></tr>
+                <tr><td>response ids</td><td className="ids">{w.steps.map((s) => s.requestId).join(", ")}</td></tr>
                 <tr><td>tokens</td><td>{w.usage.input} in / {w.usage.output} out</td></tr>
-                <tr><td>cost</td><td>${cost}</td></tr>
+                <tr><td>cost</td><td>none — local inference</td></tr>
                 <tr><td>verdict retries</td><td>{w.retries}</td></tr>
                 <tr><td>outcome</td><td><b>{w.outcome}</b></td></tr>
               </tbody>
@@ -138,7 +155,7 @@ export function App(): JSX.Element {
           {w.steps.map((s, i) => (
             <div className="card" key={s.requestId}>
               <h2>
-                Turn {i + 1} <span className="muted">({s.requestId})</span>
+                Turn {i + 1} <span className="muted ids">({s.requestId})</span>
               </h2>
               {s.items.map((it, j) => (
                 <div key={j} className={`item ${it.kind}`}>
@@ -152,9 +169,9 @@ export function App(): JSX.Element {
       </div>
 
       <footer className="muted">
-        The rejected verdict in turn 3 is the point: the model quoted &ldquo;Total Due
-        999.99&rdquo;, the document says 677.04, and deterministic code refused it with reasons.
-        Bounded retries; after that, a person takes over. MIT licensed.
+        The validation layer is load-bearing here: a 7B local model paraphrases, and when its
+        evidence is not verbatim the verdict is refused with reasons until it corrects itself or a
+        person takes over. MIT licensed.
       </footer>
     </div>
   );
@@ -169,8 +186,8 @@ const CSS = `
   h1 { margin: 0; font-size: 28px; }
   .lede { color: #475569; max-width: 75ch; }
   a { color: #0891b2; }
-  .banner { background: #fff7ed; border: 1.5px solid #fdba74; color: #9a3412;
-            border-radius: 8px; padding: 8px 12px; font-size: 13px; max-width: 75ch; }
+  .banner { border-radius: 8px; padding: 8px 12px; font-size: 13px; max-width: 75ch; }
+  .banner.live { background: #ecfdf5; border: 1.5px solid #6ee7b7; color: #065f46; }
   .cols { display: grid; grid-template-columns: 5fr 7fr; gap: 16px; }
   @media (max-width: 950px) { .cols { grid-template-columns: 1fr; } }
   .card { background: #fff; border: 1.5px solid #e2e8f0; border-radius: 10px;
@@ -180,6 +197,7 @@ const CSS = `
   table { font-size: 13.5px; border-collapse: collapse; }
   td { padding: 3px 12px 3px 0; vertical-align: top; }
   td:first-child { color: #64748b; }
+  .ids { font-size: 11.5px; word-break: break-all; }
   .muted { color: #64748b; font-size: 13px; }
   code { background: #f1f5f9; border-radius: 6px; padding: 1px 6px; font-size: 12.5px; }
   .item { border-left: 3px solid #e2e8f0; padding: 6px 10px; margin: 8px 0; }
@@ -188,4 +206,5 @@ const CSS = `
   .item.text { border-left-color: #cbd5e1; }
   .item.verdict-rejected { border-left-color: #b45309; background: #fff7ed; }
   .item.verdict-accepted { border-left-color: #0f766e; background: #ecfdf5; }
+  .item.human { border-left-color: #7c3aed; background: #f5f3ff; }
 `;

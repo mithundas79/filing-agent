@@ -7,7 +7,8 @@
     "strict": true,
     "skipLibCheck": true,
     "noEmit": true,
+    "resolveJsonModule": true,
     "allowImportingTsExtensions": false
   },
-  "include": ["src", "../src/pricing.ts", "../src/tools.ts", "../src/types.ts", "../src/validate.ts"]
+  "include": ["src", "../src/model.ts", "../src/tools.ts", "../src/types.ts", "../src/validate.ts"]
 }
