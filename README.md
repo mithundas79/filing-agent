@@ -3,6 +3,8 @@
 **A tool-calling LLM agent that classifies and files documents — and cannot
 mark its own work done.**
 
+**Live walkthrough:** <https://mithundas79.github.io/filing-agent/>
+
 The model decides *what a document is*. Deterministic code decides everything
 else: what a verdict must look like, how many chances the model gets, when a
 person takes over, and what goes in the receipt. That separation — judgment to
