@@ -1,0 +1,109 @@
+{
+  "recorded_at": "2026-09-02T15:01:42.722Z",
+  "note": "filing-agent live session over C:/Users/MITHUN/AppData/Local/Temp/rec-one, model qwen2.5:7b",
+  "exchanges": [
+    {
+      "request_digest": {
+        "model": "qwen2.5:7b",
+        "message_count": 1,
+        "tool_names": [
+          "read_document",
+          "list_categories",
+          "check_duplicates",
+          "flag_for_human",
+          "record_verdict"
+        ]
+      },
+      "response": {
+        "id": "sha256:369b214be14b8e9690cbdf16",
+        "role": "assistant",
+        "model": "qwen2.5:7b",
+        "content": [
+          {
+            "type": "tool_use",
+            "id": "tu_1",
+            "name": "read_document",
+            "input": {}
+          }
+        ],
+        "stop_reason": "tool_use",
+        "usage": {
+          "input_tokens": 733,
+          "output_tokens": 16
+        }
+      }
+    },
+    {
+      "request_digest": {
+        "model": "qwen2.5:7b",
+        "message_count": 3,
+        "tool_names": [
+          "read_document",
+          "list_categories",
+          "check_duplicates",
+          "flag_for_human",
+          "record_verdict"
+        ]
+      },
+      "response": {
+        "id": "sha256:0c6a72b3cb0acc7378055820",
+        "role": "assistant",
+        "model": "qwen2.5:7b",
+        "content": [
+          {
+            "type": "tool_use",
+            "id": "tu_2",
+            "name": "list_categories",
+            "input": {}
+          }
+        ],
+        "stop_reason": "tool_use",
+        "usage": {
+          "input_tokens": 919,
+          "output_tokens": 16
+        }
+      }
+    },
+    {
+      "request_digest": {
+        "model": "qwen2.5:7b",
+        "message_count": 5,
+        "tool_names": [
+          "read_document",
+          "list_categories",
+          "check_duplicates",
+          "flag_for_human",
+          "record_verdict"
+        ]
+      },
+      "response": {
+        "id": "sha256:f0059b139f1f8a88823bbb6d",
+        "role": "assistant",
+        "model": "qwen2.5:7b",
+        "content": [
+          {
+            "type": "tool_use",
+            "id": "tu_3",
+            "name": "record_verdict",
+            "input": {
+              "category": "supplier-invoices",
+              "vendor": "Northwind Supplies",
+              "summary": "Invoice for filter cartridges and sealing rings from Northwind Supplies",
+              "confidence": 0.95,
+              "evidence": [
+                "Invoice No: NW-2026-0481",
+                "Filter cartridges 10 in 24 408.00",
+                "Sealing rings box of 50 6 171.00"
+              ]
+            }
+          }
+        ],
+        "stop_reason": "tool_use",
+        "usage": {
+          "input_tokens": 1091,
+          "output_tokens": 114
+        }
+      }
+    }
+  ]
+}
