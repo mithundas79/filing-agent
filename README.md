@@ -166,6 +166,15 @@ browser jobs without a GPU or paid service. The optional manual verification
 dispatch becomes available when the workflow update reaches the default branch.
 It builds/tests only; GitHub Pages deployment remains a separate gated workflow.
 
+After a successful Pages deployment, the `verify-live` job runs the same ten
+desktop/mobile browser checks against **https://mithundas79.github.io/filing-agent/**.
+It sets `PUBLISHED_DEMO_URL` to that exact allowlisted URL and disables the local
+preview server, so these checks read the published site rather than a local
+mirror. Live screenshots, traces/report files use separate output directories
+and the **filing-agent-live-browser** artifact. The default browser command keeps
+building and testing the local production bundle. An unsupported or empty
+`PUBLISHED_DEMO_URL` fails configuration rather than falling back to local tests.
+
 On Windows the Unix SIGTERM process case is skipped; the other 160 core cases
 run. HTTP stubs and recorded responses test controller behavior, not live model
 quality. See [verification details](docs/implementation-status.md) for actual
