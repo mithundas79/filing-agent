@@ -70,3 +70,10 @@ Issue #3 implementation checklist: purpose/workflow, branch-specific install/run
 ## Coordinated release preparation
 
 README clone commands, demo source/guide links, local installation text and matching browser assertions now target `main`, including the related review-app guide. Historical checkpoint SHAs, recording caveats and product limits are preserved. Merge, deployment and deployed-page verification are coordinated separately; this preparation does not claim that publication or live-page verification has completed. Pages workflow/environment policy is unchanged.
+
+
+## Hosted post-deployment browser verification
+
+The original release was merged to main at `17975ce6`; the published HTML and bundled assets were checked against its deployment artifact. This follow-up adds durable interactive verification after each successful Pages deployment: `verify-live` uses the same ten desktop/mobile cases against the exact public `https://mithundas79.github.io/filing-agent/` URL. `PUBLISHED_DEMO_URL` accepts only that URL and removes the local web server; default built-site tests are unchanged. Navigation and request-origin assertions use the selected target. Screenshots/report directories and the `filing-agent-live-browser` artifact are separate from built-site evidence.
+
+The verification job runs on Ubuntu 24.04 with only `contents: read`; the Pages deployment environment/rules and its deployment permissions are unchanged. Browser configuration/test TypeScript checks are run before commit. Post-deployment interactive results will be recorded after the follow-up is merged and the workflow runs; no live browser result is claimed by this preparation.

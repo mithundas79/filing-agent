@@ -33,3 +33,30 @@ jobs:
           path: demo/dist
       - id: deployment
         uses: actions/deploy-pages@v4
+  verify-live:
+    needs: deploy
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: demo/package-lock.json
+      - run: npm ci --prefix demo
+      - run: npx playwright install --with-deps chromium
+        working-directory: demo
+      - run: npm run test:browser --prefix demo
+        env:
+          PUBLISHED_DEMO_URL: https://mithundas79.github.io/filing-agent/
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: filing-agent-live-browser
+          path: |
+            demo/playwright-report-live/
+            demo/test-results-live/
+          if-no-files-found: error
+          retention-days: 14

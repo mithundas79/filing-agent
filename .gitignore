@@ -7,3 +7,5 @@ receipts/
 /.test-http-*/
 demo/playwright-report/
 demo/test-results/
+demo/playwright-report-live/
+demo/test-results-live/

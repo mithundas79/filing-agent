@@ -1,7 +1,9 @@
 import { expect, test } from "@playwright/test";
 
-test.beforeEach(async ({ page }) => {
+test.beforeEach(async ({ page, baseURL }) => {
+  if (!baseURL) throw new Error("The browser suite requires an explicit target URL");
   await page.goto("/filing-agent/");
+  await expect(page).toHaveURL(new URL("/filing-agent/", baseURL).href);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Let a model suggest.Let the rules decide.");
 });
 
@@ -60,12 +62,14 @@ test("explains the product boundary, expands technical details and links matchin
   await expect(page.getByRole("link", { name: "Review app guide", exact: true })).toHaveAttribute("href", /doc-intake-service\/blob\/main\/README.md#try-the-guided-preview$/);
 });
 
-test("built page has no horizontal overflow, broken local assets, control characters or provider requests", async ({ page }) => {
+test("page has no horizontal overflow, broken local assets, control characters or provider requests", async ({ page, baseURL }) => {
+  if (!baseURL) throw new Error("The browser suite requires an explicit target URL");
+  const expectedOrigin = new URL(baseURL).origin;
   const failures: string[] = [];
   page.on("pageerror", (error) => failures.push(error.message));
   page.on("response", (response) => { if (response.status() >= 400) failures.push(`${response.status()} ${response.url()}`); });
   const external: string[] = [];
-  page.on("request", (request) => { if (new URL(request.url()).origin !== "http://127.0.0.1:4173") external.push(request.url()); });
+  page.on("request", (request) => { if (new URL(request.url()).origin !== expectedOrigin) external.push(request.url()); });
   await page.reload();
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   await page.getByRole("button", { name: /Check the proposal/ }).click();
@@ -80,13 +84,14 @@ test("built page has no horizontal overflow, broken local assets, control charac
   expect(external).toEqual([]);
 });
 
-test("capture the built guided walkthrough for visual review", async ({ page }, testInfo) => {
+test("capture the guided walkthrough for visual review", async ({ page }, testInfo) => {
   await page.getByRole("button", { name: /Check the proposal/ }).click();
   await expect(page.getByText("Human review required", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Try invented total" }).click();
   await page.getByRole("button", { name: "Check quote", exact: true }).click();
   await expect(page.getByText("Quote rejected", { exact: true })).toBeVisible();
-  const image = testInfo.outputPath(`${testInfo.project.name}-guided-walkthrough.png`);
+  const mode = process.env.PUBLISHED_DEMO_URL === undefined ? "built" : "live";
+  const image = testInfo.outputPath(`${mode}-${testInfo.project.name}-guided-walkthrough.png`);
   await page.screenshot({ path: image, fullPage: true, animations: "disabled" });
-  await testInfo.attach(`${testInfo.project.name} guided walkthrough`, { path: image, contentType: "image/png" });
+  await testInfo.attach(`${mode} ${testInfo.project.name} guided walkthrough`, { path: image, contentType: "image/png" });
 });
