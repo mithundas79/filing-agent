@@ -1,179 +1,216 @@
 # filing-agent
 
-**A tool-calling LLM agent that classifies and files documents — and cannot
-mark its own work done. Fully open source, top to bottom: the agent, the
-model, the runtime. No API key, no per-token bill, ever.**
+A local tool-calling document classifier with deterministic validation, bounded
+execution and controller-written receipts. The model proposes a category; code
+accepts a grounded verdict, requests human review, or records a run error.
+The CLI produces decisions and receipts; it does not move your documents.
 
-**Live walkthrough (a real recorded session):** <https://mithundas79.github.io/filing-agent/>
+The default backend is [Ollama](https://ollama.com) running `qwen2.5:7b` locally.
+No API key or paid service is required. Other Ollama tool-calling models can be
+selected with `--model`; a custom backend implements the small `ModelCaller`
+interface. Local inference consumes hardware and electricity; receipts report
+`cost_usd: null` because no per-token price is configured.
 
-The model decides *what a document is*. Deterministic code decides everything
-else: what a verdict must look like, how many chances the model gets, when a
-person takes over, and what goes in the receipt. That separation — judgment to
-the model, authority to the code — is the whole design.
+[Historical walkthrough](https://mithundas79.github.io/filing-agent/) ·
+[Implementation and verification](docs/implementation-status.md)
 
-The model is **Qwen2.5 7B Instruct** (Apache 2.0) served locally by
-[Ollama](https://ollama.com); the licence matters — it is genuinely open
-source, not a community licence with usage clauses. Any Ollama model with
-tool-calling support drops in via `--model`.
+## Fresh checkout
 
-```
-        ┌──────────────────────── the loop (code) ────────────────────────┐
-        │                                                                 │
- doc ─▶ │   model ──calls──▶ read_document / list_categories /            │
-        │     ▲              check_duplicates                             │
-        │     │ tool results (all answered in ONE message)                │
-        │     │                                                          │
-        │   model ──calls──▶ record_verdict ──▶ VALIDATED BY CODE         │
-        │                        │                  │                     │
-        │                        │ rejected w/ reasons (bounded retries)  │
-        │                        ▼                  ▼                     │
-        │                  flag_for_human      accepted                   │
-        └────────────│───────────────────────────│────────────────────────┘
-                     ▼                           ▼
-               human queue                 filed + receipt
+Node.js 20 or later and npm are recommended (the package supports Node 18+).
+
+```bash
+git clone https://github.com/mithundas79/filing-agent.git
+cd filing-agent
+npm ci
+npm run typecheck
+npm test
+npm ci --prefix demo
+npm run build --prefix demo
 ```
 
-## What makes it an agent, and what keeps it honest
+`npm test` builds the actual CLI, then runs existing scripted tests, malformed
+input/precedence/replay regressions, and integration tests against a local HTTP
+provider stub. CLI tests launch separate Node processes and inspect on-disk
+receipts and exit codes. They require neither Ollama nor a GPU. Stub results are
+not evidence of model quality.
 
-**The model drives.** It chooses which tools to call, in what order, and can
-call them in parallel. Nothing about the sequence is scripted.
-
-**The code judges.** A verdict is accepted only when deterministic validation
-passes:
-
-- the category exists in the configured set
-- confidence is in range — and *above the threshold*, otherwise the model is
-  told to flag for a human instead of forcing it
-- **every evidence quote literally appears in the document.** A model that
-  fabricates or paraphrases its supporting evidence is not corrected — it is
-  refused, told why (with the closest matching document line as a hint), and
-  given a bounded number of chances. After that, a person takes over.
-
-With a 7B model this layer is visibly **load-bearing**: small models
-paraphrase, rejections genuinely fire, and the retry path earns its keep. That
-is the thesis demonstrated, not asserted.
-
-**Every run writes a receipt** — written by the loop *around* the model, never
-by the model. A self-reported "done" is not evidence:
-
-```json
-{
-  "run_id": "…",
-  "document": { "name": "northwind-invoice.txt", "sha256": "…" },
-  "model": "qwen2.5:7b",
-  "calls": [ { "request_id": "sha256:…", "stop_reason": "tool_use", "input_tokens": 812, "output_tokens": 96 } ],
-  "tools": [ { "tool": "read_document", "input_sha256": "…", "result_sha256": "…", "is_error": false } ],
-  "usage": { "input_tokens": 1930, "output_tokens": 214 },
-  "cost_usd": null,
-  "retries": 1,
-  "outcome": { "kind": "filed", "verdict": { "category": "supplier-invoices", "evidence": ["Total Due 677.04"] } }
-}
-```
-
-A local model has no provider-issued request id, so each call is pinned by a
-digest of its own response — the receipt still identifies exactly what was
-said. `cost_usd` is `null` because local inference has no per-token price, and
-an unknown cost stated as a number would be a lie.
-
-**No silent fallback.** A refusal or an unproductive run routes to the human
-queue, never to a different model: a different model would be a different
-provenance record.
-
-## Quickstart
-
-Prerequisite: [Ollama](https://ollama.com) (Windows, macOS, Linux), then the
-model — about a 4.7 GB one-time download:
+For a real local-model run, install Ollama and download the model once:
 
 ```bash
 ollama pull qwen2.5:7b
+node dist/cli.js fixtures/reliability --out receipts --record session.json \
+  --call-timeout-ms 300000 --run-timeout-ms 600000
+node dist/cli.js fixtures/reliability --out replay-receipts --replay session.json
 ```
 
-Then:
+The backslash above is a POSIX line continuation; on PowerShell use one line.
+A 7B model needs several GB of RAM/VRAM and first-load/CPU latency can be high.
+Increase the explicit deadlines if your hardware needs more time. A different
+model changes provenance and invalidates strict replay.
+
+## Reproduce the failure paths without a model
+
+In one terminal start the deterministic HTTP stub:
 
 ```bash
-git clone https://github.com/mithundas79/filing-agent
-cd filing-agent
-npm ci
-npm test        # 16 tests, scripted model, no Ollama needed, ~1s
-
-# live, over the bundled fixtures:
-npx tsx src/cli.ts fixtures/docs --categories fixtures/categories.json --out receipts
+npm run stub -- --port 11435
 ```
 
-Record a session while running live, then replay it anywhere — no model, no
-GPU, no wait:
+In another terminal, after `npm run build`, run these commands separately. Their
+nonzero exit codes are intentional:
 
 ```bash
-npx tsx src/cli.ts fixtures/docs --record session.json
-npx tsx src/cli.ts fixtures/docs --replay session.json
+node dist/cli.js fixtures/reliability --host http://127.0.0.1:11435/success --out receipts/success --record stub-session.json
+node dist/cli.js fixtures/reliability --host http://127.0.0.1:11435/validation --out receipts/validation --max-retries 1
+node dist/cli.js fixtures/reliability --host http://127.0.0.1:11435/human --out receipts/human
+node dist/cli.js fixtures/reliability --host http://127.0.0.1:11435/malformed --out receipts/malformed
+node dist/cli.js fixtures/reliability --host http://127.0.0.1:11435/failure --out receipts/failure
+node dist/cli.js fixtures/reliability --host http://127.0.0.1:11435/timeout --out receipts/timeout --call-timeout-ms 200
+node dist/cli.js fixtures/reliability --replay stub-session.json --out receipts/replay
+node dist/cli.js fixtures/reliability --replay stub-session.json --model changed-model --out receipts/drift
 ```
 
-Replay is not a mock: it is a real session re-run through the same loop, with
-drift detection if the code no longer produces the conversation it recorded.
-The committed `fixtures/session.northwind.json` is one such real recording —
-the same one the live walkthrough page replays.
+Success and matching replay exit 0; validation exhaustion and explicit human
+review exit 1; malformed output, provider failure, timeout and replay drift exit
+2. `npm run test:integration` runs these behaviors automatically, also covering
+invalid JSON, null responses, disconnects, a stalled HTTP body, changed document
+contents, batches, repeated runs and legacy inspection. Recordings generated by
+this stub remain synthetic test data; they are never described as live sessions.
 
-Hardware honesty: a 7B model wants ~5 GB of RAM/VRAM. On a mid-range GPU a
-run takes seconds; on CPU it takes a minute or two. `--model qwen2.5:3b` is
-the low-spec fallback — noticeably shakier at tool calling, which mostly
-means you will watch the validation layer work harder.
+## Runtime guarantees
 
-## Using it as a library
+Model response objects, block types, tool IDs, stop reasons and token usage are
+validated before use. Tool inputs must match the supported schema: no null
+argument objects, extra properties or wrong field types. A verdict requires a
+known category, a string-or-null vendor, a one-line summary, finite confidence
+in `[0,1]` at or above the configured threshold, and at least one evidence quote.
+
+Evidence uses case-insensitive, whitespace-normalized substring matching. It
+rejects missing and fabricated quotes; it does not prove the model's semantic
+classification, vendor identity or calibrated confidence. The prompt asks the
+model to read first, but the controller does not enforce a fixed tool order.
+
+Invalid tool arguments/verdicts receive structured error feedback with a shared
+retry budget. Exhausting it routes to human review. An invalid provider response
+or a throwing provider/tool ends with an error receipt. Provider failures are
+not retried automatically. Defaults are 10 iterations, 3 correction retries,
+120 seconds per model call and 10 minutes for the entire document run. Limits
+must be finite integers; timeout values must be positive milliseconds.
+
+Terminal calls are resolved over the entire response before tool execution:
+
+- Any `flag_for_human` wins over every verdict regardless of order. The first
+  valid reason is used; malformed flags still request human review and add a
+  validation diagnostic. Other tools are suppressed after escalation.
+- Multiple `record_verdict` calls in one response route to a person, even when
+  both validate. A model refusal also routes to a person.
+- One valid verdict is accepted only if no tool in that response failed or was
+  rejected. All tool calls receive a traced result in one conversation message.
+
+`--call-timeout-ms`, `--run-timeout-ms`, `--max-iterations`, and `--max-retries`
+configure the limits. SIGINT/SIGTERM cancel an active run; the CLI awaits its
+receipt write and exits 2. The library also accepts an `AbortSignal` and passes
+a derived signal to the backend. The controller returns at its deadline even
+if a custom asynchronous caller ignores cancellation. Such a caller must honor
+the signal to release its own resources. Synchronous plugins that block the JS
+event loop cannot be preempted; run untrusted blocking code in another process.
+
+## Receipts and exit codes
+
+Every started classification returns a receipt while the process remains able
+to execute. The CLI writes both `<document>.receipt.json` (latest) and
+`<run_id>.receipt.json` (per-run archive), using temporary files plus rename.
+Subsequent runs retain earlier archives. The output directory must be writable.
+No program can guarantee a receipt after process termination, power loss,
+exhausted memory, or unavailable output storage. Writes do not claim disk-fsync
+or multi-file transaction durability. Bad CLI input/session JSON or unreadable
+inputs can fail during preflight before a document run starts.
+
+Receipts include document identity, timestamps, successful validated call IDs
+and canonical request hashes, usage, tool input/result hashes, retry count,
+structured `diagnostics`, and a terminal `filed`, `human`, or `error` outcome.
+Failed provider attempts have a diagnostic with their request hash and iteration;
+they have no successful call record or invented token counts. A local response
+ID is a response-content digest, not a provider-issued authentication proof.
+Tool traces identify `executed`, `rejected`, `suppressed` or `failed` calls; inspect `status`, `is_error` and
+the terminal outcome. Receipt hashes are identifiers, not tamper-proof signatures.
+
+| Exit | Meaning |
+| --- | --- |
+| 0 | Every processed document has an accepted filing decision |
+| 1 | At least one needs human review, with no run errors |
+| 2 | At least one run, replay, input/configuration or output-storage error |
+
+Batches continue after per-document provider failures and write each receipt.
+Cancellation stops after the active document. Errors take exit-code precedence
+over human review. An error is printed as `error`, never mislabeled as `human`.
+
+## Recording format and migration
+
+New recordings use `format_version: 2` and
+`fingerprint_algorithm: "sha256-canonical-json-v1"`. Each exchange stores a SHA-256
+fingerprint of canonical JSON: object keys sorted, array order preserved.
+The fingerprint binds model, token limit, system prompt, full conversation,
+tool names/descriptions/schemas and controller context. Context includes the
+complete document (even before `read_document`), category configuration, confidence
+threshold and retry/iteration policy. Cancellation signals and wall-clock
+transport deadlines are not model request contents. Replay returns copied
+responses, rejects any material request drift and checks exhaustion. The CLI
+also rejects unused exchanges at the end of a complete session; library users
+should call `replay.assertComplete()` when their whole session finishes.
+
+A recording verifies request consistency, not recording authenticity. Editing
+both a recording and its fingerprints is outside this mechanism's threat model.
+Only completed, runtime-valid responses are recorded; an interrupted recording
+may end before its run does and replay then reports exhaustion.
+
+The committed `fixtures/session.northwind.json` and `demo/src/session.live.json`
+are historical live recordings with **only message counts and tool names**.
+Their missing prompts/document contents cannot be reconstructed honestly. They
+are preserved unchanged, not assigned invented fingerprints. Strict replay
+rejects them. For historical inspection only:
+
+```bash
+# Put only northwind-invoice.txt in a directory before replaying this one-document session.
+node dist/cli.js northwind-only --replay fixtures/session.northwind.json --allow-legacy-replay --out historical-receipts
+```
+
+Explicit legacy mode checks available model/count/tool-name metadata, prints a
+warning, labels receipts `legacy-unverified`, and converts any recorded filing
+decision into human review. It cannot certify unchanged request contents. The
+browser walkthrough likewise labels its historical verdict unverified. To
+obtain strict replay, make a **new actual run** with `--record`; there is no
+lossless in-place migration of the old recordings.
+
+## Library
 
 ```ts
 import { classifyDocument, ollamaCaller } from "filing-agent";
 
+const controller = new AbortController();
 const { receipt } = await classifyDocument(
   { name: "invoice.txt", text, sha256 },
-  { caller: ollamaCaller(), categories, model: "qwen2.5:7b" },
+  { caller: ollamaCaller(), categories, model: "qwen2.5:7b",
+    callTimeoutMs: 120_000, runTimeoutMs: 600_000, signal: controller.signal },
 );
-
 if (receipt.outcome.kind === "filed") {
-  /* file it */
+  // Apply your own filing operation to receipt.outcome.verdict.
 } else {
-  /* it is in the human queue, with the reason on the receipt */
+  // Distinguish human review from an execution error; persist receipt.
 }
 ```
 
-`ModelCaller` is one small interface; the Ollama backend is one
-implementation of it. Pointing the same loop at any other backend — hosted or
-local — is a ~50-line adapter, and `src/pricing.ts` is where its per-token
-prices would go.
+Existing `ModelCaller.create(params)` adapters remain compatible; implement the
+optional second `{ signal }` argument for transport cancellation. Custom callers
+are runtime-validated too. `EmptyFiledIndex` is the CLI default and does not
+remember previous documents. Supply a persistent `FiledIndex` in your application
+if duplicate checking is required. Receipts and recordings are local JSON files;
+the repository does not provide an approval queue, authentication or a document
+storage service.
 
-## Works with doc-intake
-
-[doc-intake](https://github.com/mithundas79/doc-intake) turns scans into text
-and structured sidecars with OCR and accounting rules — offline, no model.
-This agent picks up exactly where it stops: point the CLI at a folder of
-doc-intake sidecars and it classifies them into your filing categories.
-
-The third sibling, [doc-intake-service](https://github.com/mithundas79/doc-intake-service),
-is the full-stack Python variant with a *trained* classifier instead of an LLM -
-same rule layer, different judgment engine.
-
-## Design rules
-
-- **Judgment to the model, authority to the code.** The model proposes; the
-  validation layer disposes.
-- **Grounded or refused.** Evidence must be verbatim from the document.
-- **Bounded everything.** Iterations and retries have hard limits; there are
-  no unbounded loops to babysit.
-- **Asking for help is success.** `flag_for_human` is a first-class terminal
-  outcome, never an error path.
-- **Receipts over trust.** Model, response digests, token counts, tool trace
-  with input/output hashes — for every run, written by the controller.
-- **Open end to end.** MIT code, Apache-2.0 model, MIT runtime. A reviewer
-  risks nothing by running it.
-
-## Tests
-
-The loop is tested with a *scripted* caller — each test pins the exact
-conversation, including the ways a model can misbehave: fabricated evidence,
-stopping without a verdict, refusals, infinite tool loops. See
-`test/loop.test.ts`; it doubles as the loop's specification. CI runs the
-suite without any model, which is the point: the loop's contract does not
-depend on the model behaving.
-
-## License
+[doc-intake](https://github.com/mithundas79/doc-intake) produces text/structured
+sidecars; this CLI reads `.txt` files and `.json` sidecars with a string `text`
+field. [doc-intake-service](https://github.com/mithundas79/doc-intake-service)
+provides a separate web intake workflow.
 
 MIT © Mithun Das

@@ -4,3 +4,4 @@ dist/
 .DS_Store
 receipts/
 .env
+/.test-http-*/

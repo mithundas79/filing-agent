@@ -66,4 +66,12 @@ export interface MessageCreateParams {
   system?: string;
   tools?: Tool[];
   messages: MessageParam[];
+  /** Controller-owned replay context, not transmitted as model messages. */
+  context?: {
+    document: { name: string; text: string; sha256: string };
+    categories: Array<{ key: string; description: string }>;
+    min_confidence: number;
+    max_retries: number;
+    max_iterations: number;
+  };
 }

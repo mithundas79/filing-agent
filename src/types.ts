@@ -39,6 +39,7 @@ export type Outcome =
 /** One tool invocation as observed by the loop - inputs and results are hashed. */
 export interface ToolTrace {
   tool: string;
+  status?: "executed" | "rejected" | "suppressed" | "failed";
   input_sha256: string;
   result_sha256: string;
   is_error: boolean;
@@ -46,12 +47,23 @@ export interface ToolTrace {
 
 /** One API call as observed by the loop. */
 export interface CallTrace {
+  /** Canonical request fingerprint, present for new runs. */
+  request_sha256?: string;
   /** Provider-issued message id - the model cannot forge this. */
   request_id: string;
   model: string;
   stop_reason: string | null;
   input_tokens: number;
   output_tokens: number;
+}
+
+export interface Diagnostic {
+  code: string;
+  stage: "configuration" | "provider" | "validation" | "tool" | "controller" | "replay";
+  message: string;
+  iteration?: number;
+  tool?: string;
+  request_sha256?: string;
 }
 
 /**
@@ -70,5 +82,9 @@ export interface Receipt {
   /** USD, computed from the pricing table; null when the model is unknown. */
   cost_usd: number | null;
   retries: number;
+  /** Provider, validation, tool and control failures observed by this run. */
+  diagnostics: Diagnostic[];
+  /** Legacy replay is explicitly unverified and can never file a document. */
+  replay_verification?: "canonical-v2" | "legacy-unverified";
   outcome: Outcome;
 }

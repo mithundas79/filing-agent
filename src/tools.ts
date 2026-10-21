@@ -1,5 +1,7 @@
 import type { Tool } from "./model.js";
 import type { Category, DocSource } from "./types.js";
+import { validateToolInput } from "./validate.js";
+import { AgentFailure } from "./runtime.js";
 
 /*
  * The tool surface. Two terminal tools end the run - record_verdict
@@ -90,6 +92,8 @@ export function executeTool(
   categories: Category[],
   filed: FiledIndex,
 ): string {
+  const failures = validateToolInput(name, input);
+  if (failures.length) throw new AgentFailure("invalid_tool_input", JSON.stringify(failures));
   switch (name) {
     case "read_document":
       return doc.text;
@@ -103,6 +107,6 @@ export function executeTool(
         : JSON.stringify({ matches: [], note: "no prior filing matches" });
     }
     default:
-      return JSON.stringify({ error: `unknown tool: ${name}` });
+      throw new AgentFailure("invalid_tool_input", `unknown non-terminal tool: ${name}`);
   }
 }

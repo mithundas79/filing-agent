@@ -75,10 +75,10 @@ function walk(): Walkthrough {
               body: failures.map((f) => `${f.field}: ${f.problem}`).join("\n"),
             });
           } else {
-            outcome = `filed → ${v.category} (confidence ${v.confidence})`;
+            outcome = `human review required: historical verdict ${v.category} (request unverified)`;
             items.push({
               kind: "verdict-accepted",
-              title: "record_verdict → accepted",
+              title: "Historical verdict passes validation; request unverified",
               body: `category: ${v.category}\nevidence: ${v.evidence.join(" | ")}`,
             });
           }
@@ -113,15 +113,16 @@ export function App(): JSX.Element {
         <h1>filing-agent</h1>
         <p className="lede">
           A tool-calling agent that classifies documents — and cannot mark its own work done. Below
-          is a <b>real recorded session</b>: the model&apos;s turns are replayed from the recording,
-          and every tool result and verdict decision is computed live by the repo&apos;s actual
-          code.{" "}
+          is a <b>historical recorded session</b>: the model&apos;s turns come from the recording,
+          and tool results and verdict validation use the repo&apos;s current code. This viewer
+          does not execute the controller or verify canonical request fingerprints.{" "}
           <a href="https://github.com/mithundas79/filing-agent">Source on GitHub</a>.
         </p>
         <p className="banner live">
           Recorded {recordedOn} from <b>{w.model}</b>, a local open-weights model served by Ollama —
-          no API, no key, no cost. Reproduce it: <code>npx tsx src/cli.ts fixtures/docs --record
-          session.json</code>
+          no paid API or key. This legacy recording lacks request-content fingerprints and
+          cannot authorize filing. Make a fresh v2 recording with <code>npm run dev --
+          fixtures/reliability --record session.json</code>.
         </p>
       </header>
 
@@ -145,8 +146,8 @@ export function App(): JSX.Element {
               </tbody>
             </table>
             <p className="muted">
-              Written by the loop <i>around</i> the model, never by it. A self-reported
-              &ldquo;done&rdquo; is not evidence.
+              Historical metadata plus current validation. Strict CLI replay rejects this
+              legacy format; explicit legacy inspection always requires human review.
             </p>
           </div>
         </div>
