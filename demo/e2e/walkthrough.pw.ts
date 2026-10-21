@@ -57,6 +57,7 @@ test("explains the product boundary, expands technical details and links matchin
   await expect(page.getByLabel("Local installation commands")).toContainText("git clone --branch feature/reliable-agent-runs");
   await expect(page.getByRole("link", { name: /Installation, tests and limits/ })).toHaveAttribute("href", /blob\/feature\/reliable-agent-runs\/README.md$/);
   await expect(page.getByRole("link", { name: "Source code", exact: true })).toHaveAttribute("href", /tree\/feature\/reliable-agent-runs$/);
+  await expect(page.getByRole("link", { name: "Review app guide", exact: true })).toHaveAttribute("href", /doc-intake-service\/blob\/feature\/persistent-document-review\/README.md#try-the-guided-preview$/);
 });
 
 test("built page has no horizontal overflow, broken local assets, control characters or provider requests", async ({ page }) => {

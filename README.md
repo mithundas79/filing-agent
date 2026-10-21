@@ -162,8 +162,9 @@ browser system libraries. Browser tests build the site and start its preview
 server automatically. Results go to `demo/playwright-report/` and
 `demo/test-results/`; CI uploads desktop/mobile PNG screenshots and the report
 as the **filing-agent-demo-browser** artifact. PR CI runs the complete core and
-browser jobs without a GPU or paid service. Its manual verification dispatch
-builds/tests only; GitHub Pages deployment remains a separate gated workflow.
+browser jobs without a GPU or paid service. The optional manual verification
+dispatch becomes available when the workflow update reaches the default branch.
+It builds/tests only; GitHub Pages deployment remains a separate gated workflow.
 
 On Windows the Unix SIGTERM process case is skipped; the other 160 core cases
 run. HTTP stubs and recorded responses test controller behavior, not live model
