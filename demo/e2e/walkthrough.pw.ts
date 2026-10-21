@@ -54,10 +54,10 @@ test("explains the product boundary, expands technical details and links matchin
   await expect(page.locator(".technical-details")).toContainText("No live inference, upload, OCR, file move");
   await page.getByRole("link", { name: "Run it locally", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Run the complete project.", exact: true })).toBeInViewport();
-  await expect(page.getByLabel("Local installation commands")).toContainText("git clone --branch feature/reliable-agent-runs");
-  await expect(page.getByRole("link", { name: /Installation, tests and limits/ })).toHaveAttribute("href", /blob\/feature\/reliable-agent-runs\/README.md$/);
-  await expect(page.getByRole("link", { name: "Source code", exact: true })).toHaveAttribute("href", /tree\/feature\/reliable-agent-runs$/);
-  await expect(page.getByRole("link", { name: "Review app guide", exact: true })).toHaveAttribute("href", /doc-intake-service\/blob\/feature\/persistent-document-review\/README.md#try-the-guided-preview$/);
+  await expect(page.getByLabel("Local installation commands")).toContainText("git clone --branch main");
+  await expect(page.getByRole("link", { name: /Installation, tests and limits/ })).toHaveAttribute("href", /blob\/main\/README.md$/);
+  await expect(page.getByRole("link", { name: "Source code", exact: true })).toHaveAttribute("href", /tree\/main$/);
+  await expect(page.getByRole("link", { name: "Review app guide", exact: true })).toHaveAttribute("href", /doc-intake-service\/blob\/main\/README.md#try-the-guided-preview$/);
 });
 
 test("built page has no horizontal overflow, broken local assets, control characters or provider requests", async ({ page }) => {

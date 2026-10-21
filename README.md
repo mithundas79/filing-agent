@@ -8,13 +8,13 @@ model suggests a category and quotes its evidence. Deterministic code accepts
 that proposal, asks for human review, or records an execution error.
 
 **[Open the browser demo](https://mithundas79.github.io/filing-agent/)** ·
-[Matching feature-branch source](https://github.com/mithundas79/filing-agent/tree/feature/reliable-agent-runs) ·
+[Source code on main](https://github.com/mithundas79/filing-agent/tree/main) ·
 [Verification](docs/implementation-status.md)
 
-The public demo currently serves the deployed default branch. The upgraded
-guided walkthrough described below is in [PR #2](https://github.com/mithundas79/filing-agent/pull/2)
-until the normal GitHub Pages deployment publishes it. Clone the feature branch
-to run the matching implementation now.
+The browser demo is published from `main` through GitHub Pages. Source links
+and setup commands below target `main`. Hosted build/browser checks run before
+release; deployed-page verification is recorded in the verification notes once
+publication is complete.
 
 ## What it does
 
@@ -63,10 +63,10 @@ Prerequisites: Node.js 20+ and npm. Live inference additionally needs
 First-load and CPU inference can be slow. The tests and browser walkthrough do
 not need the model. The package declares Node 18+; Node 20 is the tested setup.
 
-Until this branch merges, use this exact clone command:
+Clone the release from `main`:
 
 ```bash
-git clone --branch feature/reliable-agent-runs https://github.com/mithundas79/filing-agent.git
+git clone --branch main https://github.com/mithundas79/filing-agent.git
 cd filing-agent
 npm ci
 npm run typecheck

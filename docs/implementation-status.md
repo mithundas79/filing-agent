@@ -49,12 +49,12 @@ CLI integration creates and cleans a test-owned workspace directory, checking th
 
 ## Guided demo and README follow-up — issue #3
 
-The implementation branch now adds a guided historical walkthrough and a separate shared-validator experiment. The public Pages URL continues to serve its deployed default-branch version until the normal gated deployment publishes the update.
+The guided-demo implementation added a historical walkthrough and a separate shared-validator experiment. The verification evidence below records the pre-release checkpoints; coordinated release preparation now targets main. Deployment verification is recorded separately after publication.
 
 | Criterion | Implementation/evidence |
 | --- | --- |
 | Purpose and input/output | README opens with intended users, document-text input, checked decision/receipt output and feature limits; package description says decisions rather than physical filing. |
-| Install/run/test commands | Clone explicitly selects `feature/reliable-agent-runs`; shell-neutral single-line CLI commands, expected exits, local demo startup and core/integration/browser commands are documented. |
+| Install/run/test commands | Pre-release instructions selected `feature/reliable-agent-runs`; release setup now selects `main`. Shell-neutral single-line CLI commands, expected exits, local demo startup and core/integration/browser commands are documented. |
 | Useful browser walkthrough | Three actual recorded tool calls have step selection, Previous/Next and reset. Current shared tool/validation results are distinguished from recorded responses. Legacy outcome explicitly requires human review. |
 | Real validation experiment | Separate quote field/presets use shared `validateVerdict`; document total passes and invented total is rejected. No recording is altered. |
 | Readability/accessibility | Responsive layout, native labeled buttons/details/textarea, keyboard activation, visible progress, live feedback, focus styles and reduced-motion support. Source/UI text is UTF-8 without control/replacement characters. |
@@ -65,3 +65,8 @@ Observed local checks for the follow-up: `npm run typecheck`, `npm test` (160 pa
 
 
 Issue #3 implementation checklist: purpose/workflow, branch-specific install/run/test guidance, guided interactions/real validation, accessible responsive layout, built-base-path browser verification and rights-safe fixture content are implemented and verified. Current public demo publication remains pending; do not treat the existing default-branch page as the upgraded viewer. The related review-app footer links its implementation guide rather than an unpublished preview.
+
+
+## Coordinated release preparation
+
+README clone commands, demo source/guide links, local installation text and matching browser assertions now target `main`, including the related review-app guide. Historical checkpoint SHAs, recording caveats and product limits are preserved. Merge, deployment and deployed-page verification are coordinated separately; this preparation does not claim that publication or live-page verification has completed. Pages workflow/environment policy is unchanged.
