@@ -23,27 +23,25 @@ Draft PR: [#2](https://github.com/mithundas79/filing-agent/pull/2). Later docume
 
 Environment: Windows, Node v20.20.2, npm 10.8.2. All HTTP integration results below use a deterministic local HTTP provider stub, **not a live model**.
 
-- `npm ci` — passed; 50 packages installed using the committed lockfile.
-- `npm ci --prefix demo` — passed; 68 packages installed.
-- `npm run typecheck` — passed, including `src`, `test` and `scripts`.
-- `npm test` — passed at the last full run: 160 passed, 1 skipped, 6 files; 30 HTTP/CLI cases included (29 executed, Unix SIGTERM case skipped on Windows). Final repeated run at the code checkpoint: 6.31 seconds; all trace status assertions passed. Unknown-tool-name regressions and strict provider stop-reason handling are included.
-- `npm run test:integration` — earlier standalone run passed 26/26; expanded 30-case suite passed as part of the full run above.
-- `npm run build --prefix demo` — passed, TypeScript plus Vite production build (35 modules).
-- Original 16 scripted tests — included and passed in every complete run.
-- Root independent review ran the preceding 154-test checkpoint successfully, including 26 HTTP/CLI integration cases. Current-head Linux CI and independent review are pending confirmation after push.
+- `npm ci` â€” passed; 50 packages installed using the committed lockfile.
+- `npm ci --prefix demo` â€” passed; 68 packages installed.
+- `npm run typecheck` â€” passed, including `src`, `test` and `scripts`.
+- `npm test` â€” passed at the last full run: 160 passed, 1 skipped, 6 files; 30 HTTP/CLI cases included (29 executed, Unix SIGTERM case skipped on Windows). Final repeated run at the code checkpoint: 6.31 seconds; all trace status assertions passed. Unknown-tool-name regressions and strict provider stop-reason handling are included.
+- `npm run test:integration` â€” earlier standalone run passed 26/26; expanded 30-case suite passed as part of the full run above.
+- `npm run build --prefix demo` â€” passed, TypeScript plus Vite production build (35 modules).
+- Original 16 scripted tests â€” included and passed in every complete run.
+- Root independent review ran the preceding 154-test checkpoint successfully, including 26 HTTP/CLI integration cases. Independent Linux verification passed all 161 tests, full TypeScript checks and the demo build at `f9909178`; see [passing CI](https://github.com/mithundas79/filing-agent/actions/runs/39616056802).
 
 Initial CLI integration failed because this managed Windows environment's virtualized `os.tmpdir()` allowed writes but denied rename. A minimal comparison confirmed workspace rename succeeds. Tests now create and clean their own workspace temporary directory; the receipt writer retains temporary-file-plus-rename behavior. No persistence check was removed.
 
 ## Live-model verification
 
-Ollama and `qwen2.5:7b` were detected by the coordinator. A separate live smoke was attempted, but automatic approval review blocked continuation of its execution session; no resulting live receipt was verified. **Live-model smoke is blocked/unverified.** Do not infer model quality, successful inference or a new live recording from the HTTP stub tests. Existing historical recording files remain byte-for-byte unchanged.
+**Live-model inference remains unverified.** The passing provider integration tests use a local HTTP stub and do not establish live model quality or inference success. Existing historical recording files remain byte-for-byte unchanged.
 
 ## Remaining work and limits
 
-- Code checkpoint is committed/pushed and draft PR #2 is open. Local final checks passed; independent current-head review/Linux CI confirmation remains pending. No merge was performed.
+- Implementation is committed/pushed and draft PR #2 is open. Independent review and Linux CI passed for the implementation; this follow-up changes verification documentation only. No merge was performed.
 - Live smoke remains unverified as described above. Unix signal process test is committed for Linux CI but cannot run through forced Windows child-process signals locally.
 - Cancellation cannot preempt synchronous JavaScript that blocks the event loop. Custom asynchronous backends must honor the signal to free their own resources even though the controller deadline bounds its result.
 - Receipt persistence requires a functioning process and writable output storage; no crash/power-loss fsync guarantee is claimed. Malformed/unreadable preflight inputs may fail before any document starts.
 - Legacy recordings cannot be losslessly migrated because their original request contents were never saved. Replay consistency is not cryptographic authenticity.
-
-Codex app PR attachment was attempted after creation and failed with the app bridge MCP `-32000` error; the GitHub draft PR was created successfully.
