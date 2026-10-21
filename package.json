@@ -1,7 +1,7 @@
 {
   "name": "filing-agent",
   "version": "0.1.0",
-  "description": "A tool-calling LLM agent that classifies and files documents - and cannot mark its own work done. Deterministic validation, bounded retries, and a receipt for every run.",
+  "description": "A local tool-calling document classifier with deterministic validation, bounded execution and diagnostic receipts. Produces checked filing decisions without moving documents.",
   "type": "module",
   "license": "MIT",
   "author": "Mithun Das",
@@ -22,7 +22,11 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "vitest run",
-    "dev": "tsx src/cli.ts"
+    "dev": "tsx src/cli.ts",
+    "pretest": "npm run build",
+    "typecheck": "tsc -p tsconfig.check.json",
+    "test:integration": "npm run build && vitest run test/http.integration.test.ts",
+    "stub": "tsx scripts/provider-stub.ts"
   },
   "engines": {
     "node": ">=18"

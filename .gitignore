@@ -4,3 +4,6 @@ dist/
 .DS_Store
 receipts/
 .env
+/.test-http-*/
+demo/playwright-report/
+demo/test-results/

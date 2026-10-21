@@ -14,7 +14,7 @@ export interface Pricing {
 export const PRICING: Record<string, Pricing> = {};
 
 export function costUsd(model: string, inputTokens: number, outputTokens: number): number | null {
-  const p = PRICING[model];
+  const p = Object.hasOwn(PRICING, model) ? PRICING[model] : undefined;
   if (!p) return null;
   const usd = (inputTokens * p.inputPerMTok + outputTokens * p.outputPerMTok) / 1_000_000;
   return Number(usd.toFixed(6));
