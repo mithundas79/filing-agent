@@ -3,7 +3,8 @@
 Issue: [#1](https://github.com/mithundas79/filing-agent/issues/1)
 Branch: `feature/reliable-agent-runs`
 Date: 2026-10-21
-Checkpoint: first reliability implementation commit (see git history; SHA recorded in next documentation checkpoint).
+Code checkpoint: `c71a6bab2ffcb5b09938e3972b13dc915e8141f8` (all implementation and regression tests).
+Draft PR: [#2](https://github.com/mithundas79/filing-agent/pull/2). Later documentation-only checkpoint records these observations.
 
 ## Acceptance evidence
 
@@ -25,11 +26,11 @@ Environment: Windows, Node v20.20.2, npm 10.8.2. All HTTP integration results be
 - `npm ci` — passed; 50 packages installed using the committed lockfile.
 - `npm ci --prefix demo` — passed; 68 packages installed.
 - `npm run typecheck` — passed, including `src`, `test` and `scripts`.
-- `npm test` — passed at the last full run: 160 passed, 1 skipped, 6 files; 30 HTTP/CLI cases included (29 executed, Unix SIGTERM case skipped on Windows). This includes unknown-tool-name regressions and strict provider stop-reason handling. Trace status assertions will be checked again at the pushed checkpoint.
+- `npm test` — passed at the last full run: 160 passed, 1 skipped, 6 files; 30 HTTP/CLI cases included (29 executed, Unix SIGTERM case skipped on Windows). Final repeated run at the code checkpoint: 6.31 seconds; all trace status assertions passed. Unknown-tool-name regressions and strict provider stop-reason handling are included.
 - `npm run test:integration` — earlier standalone run passed 26/26; expanded 30-case suite passed as part of the full run above.
 - `npm run build --prefix demo` — passed, TypeScript plus Vite production build (35 modules).
 - Original 16 scripted tests — included and passed in every complete run.
-- Root independent review ran the preceding 154-test checkpoint successfully, including 26 HTTP/CLI integration cases. Current-head verification will be repeated after push.
+- Root independent review ran the preceding 154-test checkpoint successfully, including 26 HTTP/CLI integration cases. Current-head Linux CI and independent review are pending confirmation after push.
 
 Initial CLI integration failed because this managed Windows environment's virtualized `os.tmpdir()` allowed writes but denied rename. A minimal comparison confirmed workspace rename succeeds. Tests now create and clean their own workspace temporary directory; the receipt writer retains temporary-file-plus-rename behavior. No persistence check was removed.
 
@@ -39,8 +40,10 @@ Ollama and `qwen2.5:7b` were detected by the coordinator. A separate live smoke 
 
 ## Remaining work and limits
 
-- Repeat full checks at the final checkpoint; publish branch and open draft PR; wait for independent review/current-head CI.
+- Code checkpoint is committed/pushed and draft PR #2 is open. Local final checks passed; independent current-head review/Linux CI confirmation remains pending. No merge was performed.
 - Live smoke remains unverified as described above. Unix signal process test is committed for Linux CI but cannot run through forced Windows child-process signals locally.
 - Cancellation cannot preempt synchronous JavaScript that blocks the event loop. Custom asynchronous backends must honor the signal to free their own resources even though the controller deadline bounds its result.
 - Receipt persistence requires a functioning process and writable output storage; no crash/power-loss fsync guarantee is claimed. Malformed/unreadable preflight inputs may fail before any document starts.
 - Legacy recordings cannot be losslessly migrated because their original request contents were never saved. Replay consistency is not cryptographic authenticity.
+
+Codex app PR attachment was attempted after creation and failed with the app bridge MCP `-32000` error; the GitHub draft PR was created successfully.
