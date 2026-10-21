@@ -1,63 +1,106 @@
 # filing-agent
 
-A local tool-calling document classifier with deterministic validation, bounded
-execution and controller-written receipts. The model proposes a category; code
-accepts a grounded verdict, requests human review, or records a run error.
-The CLI produces decisions and receipts; it does not move your documents.
+**Turn document text into a checked filing decision, with a receipt you can inspect.**
 
-The default backend is [Ollama](https://ollama.com) running `qwen2.5:7b` locally.
-No API key or paid service is required. Other Ollama tool-calling models can be
-selected with `--model`; a custom backend implements the small `ModelCaller`
-interface. Local inference consumes hardware and electricity; receipts report
-`cost_usd: null` because no per-token price is configured.
+For developers and small teams adding a local document-classification step to a
+business workflow. Give it invoice, receipt, statement or contract text; a local
+model suggests a category and quotes its evidence. Deterministic code accepts
+that proposal, asks for human review, or records an execution error.
 
-[Historical walkthrough](https://mithundas79.github.io/filing-agent/) ·
-[Implementation and verification](docs/implementation-status.md)
+**[Open the browser demo](https://mithundas79.github.io/filing-agent/)** ·
+[Matching feature-branch source](https://github.com/mithundas79/filing-agent/tree/feature/reliable-agent-runs) ·
+[Verification](docs/implementation-status.md)
 
-## Fresh checkout
+The public demo currently serves the deployed default branch. The upgraded
+guided walkthrough described below is in [PR #2](https://github.com/mithundas79/filing-agent/pull/2)
+until the normal GitHub Pages deployment publishes it. Clone the feature branch
+to run the matching implementation now.
 
-Node.js 20 or later and npm are recommended (the package supports Node 18+).
+## What it does
+
+| Input | What happens | Output |
+| --- | --- | --- |
+| A folder of `.txt` files or JSON sidecars with a string `text` field | Ollama proposes a category; code checks shape, confidence and evidence, with bounded retries/deadlines | A `filed`, `human` or `error` decision and JSON receipts for each started run |
+| A newly recorded v2 session plus the same inputs/settings | Strict replay checks canonical request fingerprints without calling a model | A reproducible decision, or an explicit drift/exhaustion error |
+
+- Runs locally with Ollama; no API key or paid service is required.
+- Rejects malformed verdicts and fabricated evidence. Human escalation wins over
+  a competing filing verdict.
+- Keeps diagnostic receipts, per-run archives and a trace of tool execution.
+- Produces **filing decisions**; it does not move documents, OCR scans, provide
+  an approval queue or remember duplicates with the default empty index.
+- Evidence matching is case/whitespace normalized. It does not establish model
+  accuracy, vendor identity or calibrated confidence. Local inference still uses
+  your hardware and electricity; per-token cost is unknown (`cost_usd: null`).
+
+## Try the guided browser demo
+
+No installation, account or model is needed to explore the
+[GitHub Pages demo](https://mithundas79.github.io/filing-agent/).
+
+The upgraded walkthrough uses one rights-safe fictional Northwind invoice and
+three actual historical model calls:
+
+1. Read the source document beside the recorded call.
+2. Step through reading, category lookup and the classification proposal; use
+   Previous/Next, select a numbered step, or reset the walkthrough.
+3. The recorded invoice proposal passes the current shared validator. The
+   **expected legacy outcome is human review** because the old recording lacks
+   request-content fingerprints.
+4. In the separate evidence experiment, `Total Due 677.04` passes and
+   `Total Due 999.99` is rejected by the real shared `validateVerdict` function.
+
+The browser inspects saved responses and runs shared tools/validation. It makes
+no live model calls, runs no full controller, verifies no canonical replay,
+writes no authoritative receipt and moves no files. Use the local CLI for the
+complete agent, new strict recordings and receipts. See the expandable limits
+on the page for details.
+
+## Install the current implementation
+
+Prerequisites: Node.js 20+ and npm. Live inference additionally needs
+[Ollama](https://ollama.com), the `qwen2.5:7b` model, and several GB of RAM/VRAM.
+First-load and CPU inference can be slow. The tests and browser walkthrough do
+not need the model. The package declares Node 18+; Node 20 is the tested setup.
+
+Until this branch merges, use this exact clone command:
 
 ```bash
-git clone https://github.com/mithundas79/filing-agent.git
+git clone --branch feature/reliable-agent-runs https://github.com/mithundas79/filing-agent.git
 cd filing-agent
 npm ci
 npm run typecheck
 npm test
-npm ci --prefix demo
-npm run build --prefix demo
 ```
 
-`npm test` builds the actual CLI, then runs existing scripted tests, malformed
-input/precedence/replay regressions, and integration tests against a local HTTP
-provider stub. CLI tests launch separate Node processes and inspect on-disk
-receipts and exit codes. They require neither Ollama nor a GPU. Stub results are
-not evidence of model quality.
+`npm test` builds the real CLI before running its tests. Commands below each fit
+on a single line and work in PowerShell or a POSIX shell.
 
-For a real local-model run, install Ollama and download the model once:
+### Run the local model on the bundled invoice
 
 ```bash
 ollama pull qwen2.5:7b
-node dist/cli.js fixtures/reliability --out receipts --record session.json \
-  --call-timeout-ms 300000 --run-timeout-ms 600000
+node dist/cli.js fixtures/reliability --out receipts --record session.json --call-timeout-ms 300000 --run-timeout-ms 600000
 node dist/cli.js fixtures/reliability --out replay-receipts --replay session.json
 ```
 
-The backslash above is a POSIX line continuation; on PowerShell use one line.
-A 7B model needs several GB of RAM/VRAM and first-load/CPU latency can be high.
-Increase the explicit deadlines if your hardware needs more time. A different
-model changes provenance and invalidates strict replay.
+Expected: the fictional invoice should support `supplier-invoices`; actual live
+model behavior is not scripted, so it may also request review or hit a limit.
+Inspect `receipts/invoice.txt.receipt.json` for the actual decision and diagnostics.
+`filed` means a checked filing decision, not a physical file operation. New replay
+uses no model and must match the original request, settings and document contents.
+Increase explicit deadlines for slower hardware; changing models invalidates
+strict replay. Live-model quality/inference remains separately unverified.
 
-## Reproduce the failure paths without a model
+### Run a deterministic example without Ollama
 
-In one terminal start the deterministic HTTP stub:
+In one terminal:
 
 ```bash
 npm run stub -- --port 11435
 ```
 
-In another terminal, after `npm run build`, run these commands separately. Their
-nonzero exit codes are intentional:
+In another terminal, run these separately. Some exit unsuccessfully by design:
 
 ```bash
 node dist/cli.js fixtures/reliability --host http://127.0.0.1:11435/success --out receipts/success --record stub-session.json
@@ -70,12 +113,62 @@ node dist/cli.js fixtures/reliability --replay stub-session.json --out receipts/
 node dist/cli.js fixtures/reliability --replay stub-session.json --model changed-model --out receipts/drift
 ```
 
-Success and matching replay exit 0; validation exhaustion and explicit human
-review exit 1; malformed output, provider failure, timeout and replay drift exit
-2. `npm run test:integration` runs these behaviors automatically, also covering
-invalid JSON, null responses, disconnects, a stalled HTTP body, changed document
-contents, batches, repeated runs and legacy inspection. Recordings generated by
-this stub remain synthetic test data; they are never described as live sessions.
+Expected: success and matching replay exit **0**; validation exhaustion and human
+review exit **1**; malformed output, provider failure, timeout and replay drift
+exit **2**. Inspect each output folder's `invoice.txt.receipt.json`. These are
+HTTP stub demonstrations, not live inference or a live-model recording.
+
+### Run the browser walkthrough locally
+
+```bash
+npm ci --prefix demo
+npm run dev --prefix demo -- --host 127.0.0.1
+```
+
+Open **http://127.0.0.1:5173/filing-agent/**. To serve the production build instead:
+
+```bash
+npm run build --prefix demo
+npm run preview --prefix demo -- --host 127.0.0.1
+```
+
+Open **http://127.0.0.1:4173/filing-agent/**. This is the same base path tested for
+GitHub Pages; opening the built HTML directly with `file://` is unsupported.
+
+## Verify the project
+
+| Command | What it verifies |
+| --- | --- |
+| `npm run typecheck` | Source, core tests and HTTP stub types |
+| `npm test` | 161 core cases on Linux: original behavior, malformed inputs, terminal policy, deadlines and canonical replay; includes actual child-process CLI/HTTP integration |
+| `npm run test:integration` | Local HTTP provider stub plus separate-process CLI runs, persisted receipts and exit codes |
+| `npm run build --prefix demo` | Browser source typecheck and production bundle |
+| `npm run typecheck:browser --prefix demo` | Browser test/config types |
+| `npm run test:browser --prefix demo` | Built-site desktop/mobile Chromium interactions at `/filing-agent/`, validation experiment, reset, keyboard navigation and screenshots |
+
+For browser tests, install their dependencies and Chromium first:
+
+```bash
+npm ci --prefix demo
+cd demo
+npx playwright install chromium
+npm run typecheck:browser
+npm run test:browser
+cd ..
+```
+
+Linux systems may need `npx playwright install --with-deps chromium` to install
+browser system libraries. Browser tests build the site and start its preview
+server automatically. Results go to `demo/playwright-report/` and
+`demo/test-results/`; CI uploads desktop/mobile PNG screenshots and the report
+as the **filing-agent-demo-browser** artifact. PR CI runs the complete core and
+browser jobs without a GPU or paid service. Its manual verification dispatch
+builds/tests only; GitHub Pages deployment remains a separate gated workflow.
+
+On Windows the Unix SIGTERM process case is skipped; the other 160 core cases
+run. HTTP stubs and recorded responses test controller behavior, not live model
+quality. See [verification details](docs/implementation-status.md) for actual
+results and remaining limits.
 
 ## Runtime guarantees
 
@@ -213,4 +306,4 @@ sidecars; this CLI reads `.txt` files and `.json` sidecars with a string `text`
 field. [doc-intake-service](https://github.com/mithundas79/doc-intake-service)
 provides a separate web intake workflow.
 
-MIT © Mithun Das
+MIT - Mithun Das

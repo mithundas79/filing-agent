@@ -1,211 +1,104 @@
-import { useMemo } from "react";
-import type { RecordedSession } from "../../src/caller.js";
-import type { ToolUseBlock } from "../../src/model.js";
-import { EmptyFiledIndex, executeTool } from "../../src/tools.js";
-import type { Category, Verdict } from "../../src/types.js";
+import { useMemo, useState } from "react";
+import type { ValidationFailure } from "../../src/types.js";
 import { validateVerdict } from "../../src/validate.js";
 import { DOC_NAME, DOC_TEXT } from "./doc.js";
-import sessionJson from "./session.live.json";
+import { buildWalkthrough, CATEGORIES } from "./walkthrough.js";
+import "./styles.css";
 
-/*
- * A replay of one REAL recorded agent session. The model's turns come from
- * the recording; every tool result and every verdict decision is computed
- * live by the repo's actual modules - src/tools.ts and src/validate.ts -
- * the same code the CLI runs.
- */
-
-const session = sessionJson as unknown as RecordedSession;
-
-const CATEGORIES: Category[] = [
-  { key: "supplier-invoices", description: "Bills from vendors for goods or services, to be paid" },
-  { key: "receipts", description: "Proof of a payment already made, card or cash" },
-  { key: "bank-statements", description: "Periodic statements from a bank or card provider" },
-  { key: "contracts", description: "Agreements, engagement letters, signed terms" },
-  { key: "other", description: "Legitimate business documents that fit nothing above" },
-];
-
-interface StepItem {
-  kind: "text" | "tool" | "verdict-rejected" | "verdict-accepted" | "human";
-  title: string;
-  body: string;
-}
-
-interface Step {
-  requestId: string;
-  items: StepItem[];
-}
-
-interface Walkthrough {
-  steps: Step[];
-  retries: number;
-  usage: { input: number; output: number };
-  outcome: string;
-  model: string;
-}
-
-function walk(): Walkthrough {
-  const doc = { name: DOC_NAME, text: DOC_TEXT, sha256: "(computed by the CLI)" };
-  const filed = new EmptyFiledIndex();
-  const steps: Step[] = [];
-  let retries = 0;
-  let input = 0;
-  let output = 0;
-  let outcome = "unfinished";
-  let model = "";
-
-  for (const { response: r } of session.exchanges) {
-    model = r.model;
-    input += r.usage.input_tokens;
-    output += r.usage.output_tokens;
-    const items: StepItem[] = [];
-
-    for (const block of r.content) {
-      if (block.type === "text") {
-        items.push({ kind: "text", title: "model", body: block.text });
-      } else if (block.type === "tool_use") {
-        const use = block as ToolUseBlock;
-        if (use.name === "record_verdict") {
-          const v = use.input as Verdict;
-          const failures = validateVerdict(v, CATEGORIES, DOC_TEXT, 0.6);
-          if (failures.length > 0) {
-            retries++;
-            items.push({
-              kind: "verdict-rejected",
-              title: "record_verdict → REJECTED by code",
-              body: failures.map((f) => `${f.field}: ${f.problem}`).join("\n"),
-            });
-          } else {
-            outcome = `human review required: historical verdict ${v.category} (request unverified)`;
-            items.push({
-              kind: "verdict-accepted",
-              title: "Historical verdict passes validation; request unverified",
-              body: `category: ${v.category}\nevidence: ${v.evidence.join(" | ")}`,
-            });
-          }
-        } else if (use.name === "flag_for_human") {
-          const reason = (use.input as { reason?: string }).reason ?? "no reason given";
-          outcome = `human → ${reason}`;
-          items.push({ kind: "human", title: "flag_for_human", body: reason });
-        } else {
-          const result = executeTool(use.name, use.input, doc, CATEGORIES, filed);
-          items.push({
-            kind: "tool",
-            title: `${use.name}(${JSON.stringify(use.input)})`,
-            body: result.length > 260 ? result.slice(0, 260) + " …" : result,
-          });
-        }
-      }
-    }
-    steps.push({ requestId: r.id, items });
-  }
-
-  return { steps, retries, usage: { input, output }, outcome, model };
-}
+const SOURCE = "https://github.com/mithundas79/filing-agent/tree/feature/reliable-agent-runs";
+const README = "https://github.com/mithundas79/filing-agent/blob/feature/reliable-agent-runs/README.md";
+const DOCUMENT_QUOTE = "Total Due 677.04";
 
 export function App(): JSX.Element {
-  const w = useMemo(walk, []);
-  const recordedOn = new Date(session.recorded_at).toUTCString();
+  const walkthrough = useMemo(buildWalkthrough, []);
+  const [active, setActive] = useState(0);
+  const [quote, setQuote] = useState(DOCUMENT_QUOTE);
+  const [failures, setFailures] = useState<ValidationFailure[] | null>(null);
+  const step = walkthrough.steps[active]!;
+  const finalStep = active === walkthrough.steps.length - 1;
+  const recordedOn = new Date(walkthrough.recordedAt).toLocaleDateString("en", { dateStyle: "long", timeZone: "UTC" });
+
+  function chooseQuote(next: string): void { setQuote(next); setFailures(null); }
+  function reset(): void { setActive(0); chooseQuote(DOCUMENT_QUOTE); }
+  function checkQuote(): void {
+    setFailures(validateVerdict({ ...walkthrough.verdict, evidence: [quote] }, CATEGORIES, DOC_TEXT, 0.6));
+  }
 
   return (
-    <div className="wrap">
-      <style>{CSS}</style>
-      <header>
-        <h1>filing-agent</h1>
-        <p className="lede">
-          A tool-calling agent that classifies documents — and cannot mark its own work done. Below
-          is a <b>historical recorded session</b>: the model&apos;s turns come from the recording,
-          and tool results and verdict validation use the repo&apos;s current code. This viewer
-          does not execute the controller or verify canonical request fingerprints.{" "}
-          <a href="https://github.com/mithundas79/filing-agent">Source on GitHub</a>.
-        </p>
-        <p className="banner live">
-          Recorded {recordedOn} from <b>{w.model}</b>, a local open-weights model served by Ollama —
-          no paid API or key. This legacy recording lacks request-content fingerprints and
-          cannot authorize filing. Make a fresh v2 recording with <code>npm run dev --
-          fixtures/reliability --record session.json</code>.
-        </p>
-      </header>
-
-      <div className="cols">
-        <div>
-          <div className="card">
-            <h2>The document</h2>
-            <pre>{DOC_TEXT}</pre>
-          </div>
-          <div className="card">
-            <h2>Run summary — what the receipt records</h2>
-            <table>
-              <tbody>
-                <tr><td>model</td><td><code>{w.model}</code></td></tr>
-                <tr><td>API calls</td><td>{w.steps.length}</td></tr>
-                <tr><td>response ids</td><td className="ids">{w.steps.map((s) => s.requestId).join(", ")}</td></tr>
-                <tr><td>tokens</td><td>{w.usage.input} in / {w.usage.output} out</td></tr>
-                <tr><td>cost</td><td>none — local inference</td></tr>
-                <tr><td>verdict retries</td><td>{w.retries}</td></tr>
-                <tr><td>outcome</td><td><b>{w.outcome}</b></td></tr>
-              </tbody>
-            </table>
-            <p className="muted">
-              Historical metadata plus current validation. Strict CLI replay rejects this
-              legacy format; explicit legacy inspection always requires human review.
-            </p>
-          </div>
-        </div>
-
-        <div>
-          {w.steps.map((s, i) => (
-            <div className="card" key={s.requestId}>
-              <h2>
-                Turn {i + 1} <span className="muted ids">({s.requestId})</span>
-              </h2>
-              {s.items.map((it, j) => (
-                <div key={j} className={`item ${it.kind}`}>
-                  <div className="t">{it.title}</div>
-                  <pre>{it.body}</pre>
-                </div>
-              ))}
+    <>
+      <a className="skip-link" href="#walkthrough">Skip to the walkthrough</a>
+      <div className="page-shell">
+        <header className="site-header">
+          <a className="wordmark" href="#top" aria-label="filing-agent home"><span className="brand-symbol" aria-hidden="true">f.</span>filing-agent</a>
+          <nav aria-label="Main navigation"><a href="#walkthrough">Walkthrough</a><a href="#experiment">Try the rule</a><a href={README}>Read the guide <span aria-hidden="true">↗</span></a></nav>
+        </header>
+        <main id="top">
+          <section className="hero" aria-labelledby="hero-title">
+            <div className="hero-copy">
+              <p className="eyebrow"><span className="status-dot" aria-hidden="true" /> A small agent. A clear paper trail.</p>
+              <h1 id="hero-title">Let a model suggest.<br /><span>Let the rules decide.</span></h1>
+              <p className="hero-description">Turn business document text into a filing suggestion you can inspect. The local model proposes a category; code checks its evidence and knows when to ask a person.</p>
+              <div className="hero-actions"><a className="button primary" href="#walkthrough">Explore the example <span aria-hidden="true">↓</span></a><a className="button secondary" href="#run-locally">Run it locally</a></div>
+              <p className="hero-note">For developers building document workflows. No account or installation needed for this walkthrough.</p>
             </div>
-          ))}
-        </div>
-      </div>
+            <aside className="preview-card" aria-label="Example workflow">
+              <span className="sample-tag">FICTIONAL SAMPLE</span>
+              <div className="paper-icon" aria-hidden="true">↳</div>
+              <p className="preview-name">northwind-invoice.txt</p>
+              <p className="preview-description">An invoice. Three recorded tool calls.<br />One decision worth checking.</p>
+              <div className="preview-flow"><span>Document text</span><span aria-hidden="true">↓</span><span>Model proposal + evidence</span><span aria-hidden="true">↓</span><strong>Validation + human review</strong></div>
+            </aside>
+          </section>
 
-      <footer className="muted">
-        The validation layer is load-bearing here: a 7B local model paraphrases, and when its
-        evidence is not verbatim the verdict is refused with reasons until it corrects itself or a
-        person takes over. MIT licensed.
-      </footer>
-    </div>
+          <section className="mode-strip" aria-label="What runs in this demo">
+            <div><span className="mode-label">RECORDED</span><p>Model responses from one historical Ollama run.</p></div>
+            <div><span className="mode-label">RUNNING NOW</span><p>Shared tool functions and evidence validation in your browser.</p></div>
+            <div><span className="mode-label">LOCAL PROJECT</span><p>Full controller, live inference and receipts require the CLI.</p></div>
+          </section>
+
+          <section className="guide-intro" aria-labelledby="how-title">
+            <div><p className="eyebrow">A two-minute tour</p><h2 id="how-title">How to use this example</h2></div>
+            <ol className="how-list"><li><span>01</span>Read the fictional invoice beside the walkthrough.</li><li><span>02</span>Move through the three recorded calls and inspect what code checks.</li><li><span>03</span>Try an invented quote, then run the full project locally.</li></ol>
+          </section>
+
+          <section id="walkthrough" className="walkthrough-section" aria-labelledby="walkthrough-title">
+            <div className="section-heading"><div><p className="eyebrow">Follow the decision</p><h2 id="walkthrough-title">From text to a checked proposal</h2></div><button className="text-button" type="button" onClick={reset}>Reset walkthrough <span aria-hidden="true">↺</span></button></div>
+            <div className="workbench">
+              <aside className="document-panel" aria-labelledby="document-title">
+                <div className="panel-heading"><div><p className="eyebrow">01 / Source document</p><h3 id="document-title">The invoice</h3></div><span className="subtle-badge">.txt</span></div>
+                <p className="file-name">{DOC_NAME}</p>
+                <pre className="document-text">{DOC_TEXT.split("\n").map((line, index) => <span key={index} className={line.startsWith("Total Due") ? "document-total" : ""}>{line}{"\n"}</span>)}</pre>
+                <p className="small-note">Fictional company and invoice, published as a project fixture. No upload or personal document is used.</p>
+              </aside>
+              <div className="step-panel">
+                <div className="panel-heading"><div><p className="eyebrow">02 / Recorded model, current checks</p><h3>Walk through the calls</h3></div><span className="subtle-badge">{walkthrough.model}</span></div>
+                <ol className="step-tabs" aria-label="Recorded steps">{walkthrough.steps.map((item, index) => <li key={item.id}><button type="button" onClick={() => setActive(index)} aria-current={active === index ? "step" : undefined} aria-controls="step-detail"><span className="step-number">{String(index + 1).padStart(2, "0")}</span>{item.title}</button></li>)}</ol>
+                <div className="progress-line"><span data-testid="step-progress">Step {active + 1} of {walkthrough.steps.length}</span><progress aria-label="Walkthrough progress" value={active + 1} max={walkthrough.steps.length} /></div>
+                <article id="step-detail" className="step-detail" aria-live="polite" aria-atomic="true">
+                  <h4>{step.title}</h4><p>{step.explanation}</p>
+                  {step.items.map((item, index) => <div key={index}>
+                    <div className="call-card"><span className="card-label">RECORDED MODEL CALL</span><code className="tool-name">{item.tool}</code><details className="call-arguments"><summary>Inspect recorded arguments</summary><pre>{JSON.stringify(item.input, null, 2)}</pre></details></div>
+                    <div className={`result-card ${item.rejected ? "rejected" : ""}`}><span className="card-label">COMPUTED NOW WITH SHARED CODE</span><strong>{item.tool === "record_verdict" ? item.rejected ? "Proposal rejected" : "Evidence check passes" : "Tool result"}</strong><pre>{item.result}</pre></div>
+                  </div>)}
+                  {finalStep && <div className="review-notice" role="status"><span className="card-label">EXPECTED OUTCOME FOR THIS LEGACY RECORDING</span><strong>Human review required</strong><p>The invoice proposal passes today&apos;s validation. This old recording did not save request-content fingerprints, so it cannot authorize filing. Explicit legacy CLI inspection also requires a person.</p></div>}
+                </article>
+                <div className="step-controls"><button type="button" className="button secondary" disabled={active === 0} onClick={() => setActive((value) => value - 1)}>← Previous step</button><button type="button" className="button dark" disabled={finalStep} onClick={() => setActive((value) => value + 1)}>Next step →</button></div>
+                <p className="small-note">Historical responses recorded {recordedOn}. No model is being called here.</p>
+              </div>
+            </div>
+          </section>
+
+          <section id="experiment" className="experiment-section" aria-labelledby="experiment-title">
+            <div className="experiment-intro"><p className="eyebrow">Your turn</p><h2 id="experiment-title">A quote is evidence.<br />An invented total isn&apos;t.</h2><p>Change one quote and run the same <code>validateVerdict</code> function used by the local project. This separate experiment edits a sample proposal, not the recording.</p><div className="expected-note"><strong>What to expect</strong><p><code>Total Due 677.04</code> passes. <code>Total Due 999.99</code> is rejected because it is not in the document.</p></div></div>
+            <div className="experiment-card"><label htmlFor="evidence-quote">Evidence quote to check</label><textarea id="evidence-quote" value={quote} onChange={(event) => chooseQuote(event.target.value)} rows={3} spellCheck={false} aria-describedby="quote-help" /><p id="quote-help" className="small-note">Matching ignores case and repeated whitespace. It does not judge whether the category is semantically correct.</p><div className="preset-controls"><button className="text-button" type="button" onClick={() => chooseQuote(DOCUMENT_QUOTE)}>Use document quote</button><button className="text-button" type="button" onClick={() => chooseQuote("Total Due 999.99")}>Try invented total</button></div><button type="button" className="button dark" onClick={checkQuote}>Check quote</button><div className="experiment-feedback" aria-live="polite" aria-atomic="true">{failures === null ? <p className="unchecked">Ready to check. Choose a quote, then select Check quote.</p> : failures.length ? <div className="validation-message invalid"><strong>Quote rejected</strong><ul>{failures.map((failure, index) => <li key={index}>{failure.problem}</li>)}</ul></div> : <div className="validation-message valid"><strong>Quote supported by the document</strong><p>The evidence check passes. This experiment makes no filing decision.</p></div>}</div></div>
+          </section>
+
+          <section className="capabilities-section" aria-labelledby="capabilities-title"><p className="eyebrow">Know what you are seeing</p><h2 id="capabilities-title">Explore in a browser. Run the agent locally.</h2><div className="capability-grid"><div className="capability-card"><span className="small-caps">THIS WALKTHROUGH</span><h3>Learn the decision path</h3><ul><li>Inspect a historical model response.</li><li>Run shared tool and validation code.</li><li>Try supported and fabricated evidence.</li><li>Reset the example at any time.</li></ul></div><div className="capability-card tinted"><span className="small-caps">THE LOCAL CLI</span><h3>Process your own text</h3><ul><li>Call a local Ollama model.</li><li>Enforce deadlines and human escalation.</li><li>Write diagnostic receipts to disk.</li><li>Record new sessions with strict replay checks.</li></ul></div></div><details className="technical-details"><summary>Technical details and limits</summary><div><p>This page inspects <code>demo/src/session.live.json</code>. It calls shared <code>executeTool</code> and <code>validateVerdict</code> functions; it does not execute the full agent controller, verify canonical replay fingerprints or issue an authoritative receipt.</p><p>No live inference, upload, OCR, file move or persistent review queue runs here. The CLI also produces filing decisions rather than moving documents. Its default duplicate index is empty. Evidence matching proves a quote appears after normalization; it does not prove classification accuracy or calibrated confidence.</p><p>The historical model proposed <code>{walkthrough.verdict.category}</code> at confidence {walkthrough.verdict.confidence}. There were {walkthrough.rejected} rejected proposals in this recording. Recorded usage: {walkthrough.usage.input} input / {walkthrough.usage.output} output tokens; no new inference tokens are used by this page.</p></div></details></section>
+
+          <section id="run-locally" className="local-section" aria-labelledby="local-title"><div><p className="eyebrow">Take it further</p><h2 id="local-title">Run the complete project.</h2><p>You need Node.js 20+, npm, Ollama and the local model for live inference. The automated stub tests need no model or paid service.</p><p className="small-note">These commands use the implementation branch while the pull request is open. Run each command on its own line in PowerShell or a POSIX shell.</p><a className="button primary" href={README}>Installation, tests and limits <span aria-hidden="true">↗</span></a></div><pre className="terminal" aria-label="Local installation commands"><code>{`git clone --branch feature/reliable-agent-runs https://github.com/mithundas79/filing-agent.git\ncd filing-agent\nnpm ci\nnpm test\nollama pull qwen2.5:7b\nnode dist/cli.js fixtures/reliability --out receipts`}</code></pre></section>
+        </main>
+        <footer className="site-footer"><p>filing-agent <span>·</span> MIT licensed <span>·</span> Fictional project fixtures</p><nav aria-label="Project links"><a href={SOURCE}>Source code</a><a href="https://mithundas79.github.io/doc-intake/">Offline OCR demo</a><a href="https://mithundas79.github.io/doc-intake-service/">Review app preview</a></nav></footer>
+      </div>
+    </>
   );
 }
-
-const CSS = `
-  :root { color-scheme: light; }
-  * { box-sizing: border-box; }
-  body { margin: 0; background: #f6f8fa; color: #0f172a;
-         font: 15px/1.5 "Segoe UI", system-ui, sans-serif; }
-  .wrap { max-width: 1150px; margin: 0 auto; padding: 28px 20px 40px; }
-  h1 { margin: 0; font-size: 28px; }
-  .lede { color: #475569; max-width: 75ch; }
-  a { color: #0891b2; }
-  .banner { border-radius: 8px; padding: 8px 12px; font-size: 13px; max-width: 75ch; }
-  .banner.live { background: #ecfdf5; border: 1.5px solid #6ee7b7; color: #065f46; }
-  .cols { display: grid; grid-template-columns: 5fr 7fr; gap: 16px; }
-  @media (max-width: 950px) { .cols { grid-template-columns: 1fr; } }
-  .card { background: #fff; border: 1.5px solid #e2e8f0; border-radius: 10px;
-          padding: 14px 16px; margin-bottom: 16px; }
-  .card h2 { margin: 0 0 10px; font-size: 15px; }
-  pre { margin: 0; font-size: 12.5px; white-space: pre-wrap; word-break: break-word; }
-  table { font-size: 13.5px; border-collapse: collapse; }
-  td { padding: 3px 12px 3px 0; vertical-align: top; }
-  td:first-child { color: #64748b; }
-  .ids { font-size: 11.5px; word-break: break-all; }
-  .muted { color: #64748b; font-size: 13px; }
-  code { background: #f1f5f9; border-radius: 6px; padding: 1px 6px; font-size: 12.5px; }
-  .item { border-left: 3px solid #e2e8f0; padding: 6px 10px; margin: 8px 0; }
-  .item .t { font-weight: 600; font-size: 13px; margin-bottom: 3px; }
-  .item.tool { border-left-color: #0891b2; }
-  .item.text { border-left-color: #cbd5e1; }
-  .item.verdict-rejected { border-left-color: #b45309; background: #fff7ed; }
-  .item.verdict-accepted { border-left-color: #0f766e; background: #ecfdf5; }
-  .item.human { border-left-color: #7c3aed; background: #f5f3ff; }
-`;

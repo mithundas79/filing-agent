@@ -30,9 +30,9 @@ Environment: Windows, Node v20.20.2, npm 10.8.2. All HTTP integration results be
 - `npm run test:integration` — earlier standalone run passed 26/26; expanded 30-case suite passed as part of the full run above.
 - `npm run build --prefix demo` — passed, TypeScript plus Vite production build (35 modules).
 - Original 16 scripted tests — included and passed in every complete run.
-- Root independent review ran the preceding 154-test checkpoint successfully, including 26 HTTP/CLI integration cases. Independent Linux verification passed all 161 tests, full TypeScript checks and the demo build at `f9909178`; see [passing CI](https://github.com/mithundas79/filing-agent/actions/runs/39616056802).
+- Independent review ran the preceding 154-test checkpoint successfully, including 26 HTTP/CLI integration cases. Independent Linux verification passed all 161 tests, full TypeScript checks and the demo build at `f9909178`; see [passing CI](https://github.com/mithundas79/filing-agent/actions/runs/39616056802).
 
-Initial CLI integration failed because this managed Windows environment's virtualized `os.tmpdir()` allowed writes but denied rename. A minimal comparison confirmed workspace rename succeeds. Tests now create and clean their own workspace temporary directory; the receipt writer retains temporary-file-plus-rename behavior. No persistence check was removed.
+CLI integration creates and cleans a test-owned workspace directory, checking the same temporary-file-plus-rename receipt writes used by the real command.
 
 ## Live-model verification
 
@@ -45,3 +45,20 @@ Initial CLI integration failed because this managed Windows environment's virtua
 - Cancellation cannot preempt synchronous JavaScript that blocks the event loop. Custom asynchronous backends must honor the signal to free their own resources even though the controller deadline bounds its result.
 - Receipt persistence requires a functioning process and writable output storage; no crash/power-loss fsync guarantee is claimed. Malformed/unreadable preflight inputs may fail before any document starts.
 - Legacy recordings cannot be losslessly migrated because their original request contents were never saved. Replay consistency is not cryptographic authenticity.
+
+
+## Guided demo and README follow-up — issue #3
+
+The implementation branch now adds a guided historical walkthrough and a separate shared-validator experiment. The public Pages URL continues to serve its deployed default-branch version until the normal gated deployment publishes the update.
+
+| Criterion | Implementation/evidence |
+| --- | --- |
+| Purpose and input/output | README opens with intended users, document-text input, checked decision/receipt output and feature limits; package description says decisions rather than physical filing. |
+| Install/run/test commands | Clone explicitly selects `feature/reliable-agent-runs`; shell-neutral single-line CLI commands, expected exits, local demo startup and core/integration/browser commands are documented. |
+| Useful browser walkthrough | Three actual recorded tool calls have step selection, Previous/Next and reset. Current shared tool/validation results are distinguished from recorded responses. Legacy outcome explicitly requires human review. |
+| Real validation experiment | Separate quote field/presets use shared `validateVerdict`; document total passes and invented total is rejected. No recording is altered. |
+| Readability/accessibility | Responsive layout, native labeled buttons/details/textarea, keyboard activation, visible progress, live feedback, focus styles and reduced-motion support. Source/UI text is UTF-8 without control/replacement characters. |
+| Built-demo browser QA | Playwright desktop/mobile Chromium projects build/serve `/filing-agent/`; tests exercise navigation, keyboard/reset, quote rejection/acceptance, technical explanation, matching source links, overflow/assets and no provider requests. CI uploads full-page PNGs and HTML/report results. |
+| Deployment boundary | Pages workflow/environment policy is unchanged. Verification CI has an optional manual build/test dispatch; it does not publish. Independent hosted browser checks and deployed-page verification are required before completion. |
+
+Observed local checks for the follow-up: `npm run typecheck`, `npm test` (160 passed, 1 Unix-only skipped), `npm run build --prefix demo` (38 modules), and `npm run typecheck:browser --prefix demo` passed. Browser execution/screenshots are pending hosted CI; no local browser run is claimed. Existing historical recording files are unchanged. The examples contain only fictional project fixtures.
